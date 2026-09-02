@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from fastapi import File, UploadFile
+from fastapi import File, Form, UploadFile
 
 from kb.config import KB_ROOT
 from kb.ingestion.pipeline import ingest
@@ -25,6 +25,11 @@ class ChatRequest(BaseModel):
     question: str
 
 
+class ReviewRequest(BaseModel):
+    filename: str
+    topic: str = ""
+
+
 @app.get("/")
 def index():
     return RedirectResponse(url="/static/index.html")
@@ -35,13 +40,13 @@ _ALLOWED_SUFFIX = {".md", ".docx"}
 
 
 @app.post("/api/upload")
-async def api_upload(file: UploadFile = File(...), topic: str = "notes_draft"):
-    """网页上传笔记：存进 knowledge/raw/<topic>/ 并自动增量入库。
-    返回入库统计。topic 默认 notes_draft，前端可指定领域。"""
-    # 安全：只收 .md/.docx；文件名清洗（去掉路径分隔符，防目录穿越）
+async def api_upload(file: UploadFile = File(...), auto: str = Form("0")):
+    """网页上传：默认进待审查区并 LLM 建议主题；auto=1 时直接分类入库。
+    返回: {status: pending|done, filename, suggest_topic, ingest?...}"""
     import re
-    from kb.config import raw_dir
-    from kb.ingestion.pipeline import ingest as run_ingest
+    from kb.config import pending_dir
+    from kb.ingestion.pending import add as pending_add, approve as pending_approve
+    from kb.ingestion.classifier import suggest_topic
 
     suffix = pathlib_suffix(file.filename or "")
     if suffix not in _ALLOWED_SUFFIX:
@@ -50,18 +55,69 @@ async def api_upload(file: UploadFile = File(...), topic: str = "notes_draft"):
     if not safe_name.endswith(tuple(_ALLOWED_SUFFIX)):
         safe_name += suffix
 
-    # 目标目录：raw/<topic>/（顶层目录 = 领域）
-    dest_dir = raw_dir() / topic
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / safe_name
-
-    # 落盘（分块写，支持稍大文件）
     content = await file.read()
-    dest.write_bytes(content)
-    print(f"[上传] {topic}/{safe_name} ({len(content)} 字节)")
 
-    # 增量入库（hash 对比：同名同内容会自动跳过）
-    return {"saved": f"{topic}/{safe_name}", "size": len(content), "ingest": run_ingest()}
+    # 文件先落 pending/（无论 auto 与否都先到这，auto 再继续走 approve）
+    pdir = pending_dir()
+    pdir.mkdir(parents=True, exist_ok=True)
+    (pdir / safe_name).write_bytes(content)
+    print(f"[上传] 收到 {safe_name} ({len(content)} 字节)")
+
+    # LLM 建议主题（读内容前 1500 字；失败返回空串 = 待人工填）
+    text_head = content.decode("utf-8", errors="ignore")
+    topic = suggest_topic(text_head)
+    print(f"[分类] 建议主题: {topic or '（待定）'}")
+
+    # auto 模式：直接审查通过（移入 raw/<topic> + 入库）
+    if auto in ("1", "true", "True"):
+        if not topic:
+            topic = "默认"
+        try:
+            moved = pending_approve(safe_name, topic)
+        except Exception as e:
+            raise HTTPException(500, f"自动入库失败: {e}")
+        from kb.ingestion.pipeline import ingest as run_ingest
+        stats = run_ingest()
+        return {"status": "done", "filename": safe_name,
+                "topic": topic, "path": moved["path"], "ingest": stats}
+
+    # 默认：登记进待审查
+    pending_add(safe_name, topic, len(content))
+    return {"status": "pending", "filename": safe_name,
+            "suggest_topic": topic, "size": len(content),
+            "tip": "已进入待审查区，确认后才会入库"}
+
+
+@app.get("/api/pending")
+def api_pending():
+    """列出待审查文件。"""
+    from kb.ingestion.pending import list_all
+    return {"pending": list_all()}
+
+
+@app.post("/api/review")
+async def api_review(req: ReviewRequest):
+    """人工审查通过：移入 raw/<topic> 并入库。body: {filename, topic}"""
+    from kb.ingestion.pipeline import ingest as run_ingest
+    from kb.ingestion.pending import approve
+    try:
+        moved = approve(req.filename, req.topic)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    stats = run_ingest()
+    return {"ok": True, "path": moved["path"], "ingest": stats}
+
+
+@app.delete("/api/pending")
+async def api_pending_delete(req: ReviewRequest):
+    """丢弃一条待审查。body: {filename}（topic 可空）"""
+    from kb.ingestion.pending import reject
+    ok = reject(req.filename)
+    if not ok:
+        raise HTTPException(404, "记录不存在")
+    return {"ok": True}
 
 
 def pathlib_suffix(name: str) -> str:

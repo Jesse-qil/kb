@@ -26,6 +26,11 @@ def index_file() -> Path:
     return KNOWLEDGE_DIR / "index" / "doc_index.json"
 
 
+
+def pending_dir() -> Path:
+    """待审查区：上传文件先落这里（在 raw 外，ingest 不会误扫）。"""
+    return KNOWLEDGE_DIR / "pending"
+
 def chroma_dir() -> Path:
     return KNOWLEDGE_DIR / "vector_store" / "chroma"
 

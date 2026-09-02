@@ -78,9 +78,20 @@
   <h1>📚 个人知识库</h1>
   <div class="actions">
     <span id="stats"></span>
+    <label style="font-size:13px;color:#9aa0b4;display:flex;align-items:center;gap:4px;cursor:pointer">
+      <input type="checkbox" id="autoMode" style="accent-color:#4c6ef5"> 自动入库
+    </label>
     <button onclick="document.getElementById('fileInput').click()">📤 上传笔记</button>
     <input type="file" id="fileInput" accept=".md,.docx" multiple style="display:none" onchange="upload()">
     <button onclick="ingest()">🔄 重新导入</button>
+    <button id="pendingBtn" onclick="togglePending()" style="display:none">📋 待审查 <span id="pendingCount">0</span></button>
+  </div>
+</div>
+
+<div id="pendingPanel" style="display:none;background:#2a2a3c;border-bottom:1px solid #3a3a52;padding:12px 24px">
+  <div style="max-width:760px;margin:0 auto">
+    <h3 style="font-size:15px;color:#fff;margin-bottom:10px">📋 待审查文件（确认后才会入库）</h3>
+    <div id="pendingList"></div>
   </div>
 </div>
 
@@ -145,28 +156,98 @@ async function upload() {
   const input = document.getElementById("fileInput");
   if (!input.files.length) return;
   const files = Array.from(input.files);
+  const auto = document.getElementById("autoMode").checked;
   const names = files.map(f => f.name).join("、");
-  addMsg("📤 正在上传并导入：" + names, "user");
-  let okCount = 0, failMsg = "";
+  addMsg((auto ? "🤖" : "📤") + " 正在上传" + (auto ? "（自动入库）" : "（待审查）") + "：" + names, "user");
+  let pendingNames = [], doneNames = [], failMsg = "";
   for (const file of files) {
     const fd = new FormData();
     fd.append("file", file);
-    // topic 留空 → 后端默认 notes_draft；如需选领域可改这里
-    fd.append("topic", "notes_draft");
+    fd.append("auto", auto ? "1" : "0");
     try {
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const data = await res.json();
-      if (res.ok) { okCount++; }
-      else { failMsg += (failMsg ? "；" : "") + (data.detail || "失败"); }
-    } catch (e) {
-      failMsg += (failMsg ? "；" : "") + file.name + " 请求失败";
-    }
+      if (res.ok) {
+        if (data.status === "pending") {
+          pendingNames.push(data.filename + (data.suggest_topic ? " → 建议[" + data.suggest_topic + "]" : " → 主题待定"));
+        } else {
+          doneNames.push(data.filename + " → [" + (data.topic || "默认") + "]");
+        }
+      } else { failMsg += (failMsg ? "；" : "") + (data.detail || "失败"); }
+    } catch (e) { failMsg += (failMsg ? "；" : "") + file.name + " 请求失败"; }
   }
-  addMsg(okCount > 0
-    ? "✅ 已导入 " + okCount + " 个文件（统计已刷新）"
-    : "⚠️ 上传失败：" + (failMsg || "未知错误"), "bot");
+  if (doneNames.length) addMsg("✅ 已自动入库：" + doneNames.join("、"), "bot");
+  if (pendingNames.length) addMsg("📋 已进入待审查：" + pendingNames.join("、") + "。点击右上角「待审查」确认入库。", "bot");
+  if (failMsg) addMsg("⚠️ 失败：" + failMsg, "bot");
   input.value = "";
+  refreshPending();
   stats();
+}
+
+// ---- 待审查面板 ----
+function togglePending() {
+  const p = document.getElementById("pendingPanel");
+  p.style.display = p.style.display === "none" ? "block" : "none";
+  if (p.style.display !== "none") refreshPending();
+}
+
+async function refreshPending() {
+  try {
+    const res = await fetch("/api/pending");
+    const data = await res.json();
+    const list = data.pending || [];
+    const btn = document.getElementById("pendingBtn");
+    const countEl = document.getElementById("pendingCount");
+    const box = document.getElementById("pendingList");
+    if (list.length) {
+      btn.style.display = "";
+      countEl.textContent = list.length;
+    } else {
+      btn.style.display = "none";
+    }
+    box.innerHTML = list.length ? "" : "<div style='color:#7a8096;font-size:13px'>没有待审查文件</div>";
+    list.forEach(item => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed #3a3a52";
+      row.innerHTML =
+        "<span style='flex:0 0 auto;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px'>📄 " + item.filename + "</span>" +
+        "<input id='topic_" + item.filename + "' value='" + (item.suggest_topic || "") + "' placeholder='主题（可改）' style='flex:1;background:#1e1e2e;border:1px solid #3a3a52;border-radius:6px;padding:4px 8px;color:#e8e8f0;font-size:13px'>" +
+        "<button onclick='reviewApprove(this)' data-file='" + item.filename + "' style='background:#4c6ef5;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px'>✓ 确认入库</button>" +
+        "<button onclick='reviewReject(this)' data-file='" + item.filename + "' style='background:#3a3a52;color:#ff8787;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px'>✕ 丢弃</button>";
+      box.appendChild(row);
+    });
+  } catch (e) { /* 服务没起时忽略 */ }
+}
+
+async function reviewApprove(btn) {
+  const file = btn.getAttribute("data-file");
+  const topicInput = document.getElementById("topic_" + file);
+  const topic = topicInput.value.trim();
+  if (!topic) { alert("请填写主题目录名"); return; }
+  btn.disabled = true; btn.textContent = "入库中…";
+  try {
+    const res = await fetch("/api/review", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file, topic: topic }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      addMsg("✅ 已入库：" + file + " → [" + topic + "]", "bot");
+    } else { alert("失败：" + (data.detail || "未知")); }
+  } catch (e) { alert("请求失败：" + e); }
+  refreshPending(); stats();
+}
+
+async function reviewReject(btn) {
+  const file = btn.getAttribute("data-file");
+  if (!confirm("丢弃 " + file + "？")) return;
+  try {
+    await fetch("/api/pending", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file }),
+    });
+  } catch (e) { }
+  refreshPending(); stats();
 }
 
 async function ingest() {
@@ -217,6 +298,7 @@ document.getElementById("question").addEventListener("keydown", e => {
 });
 
 stats();
+refreshPending();
 </script>
 </body>
 </html>
