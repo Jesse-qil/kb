@@ -7,8 +7,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from kb.config import KB_ROOT
-from kb.kb_rag import ingest, list_contents
-from kb.graph import ask
+from kb.ingestion.pipeline import ingest
+from kb.storage.vector_store import list_contents
+from kb.agents.graph import ask
 
 app = FastAPI(title="kb-v2 个人知识库")
 

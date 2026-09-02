@@ -3,7 +3,7 @@
 用途：增量更新（对比 hash 判断改没改过）、删除检测、前端列文档。"""
 import json
 from pathlib import Path
-from .config import index_file
+from ..config import index_file
 
 
 def load() -> dict:

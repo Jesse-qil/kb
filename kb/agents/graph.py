@@ -7,11 +7,11 @@ from typing import TypedDict
 
 from langgraph.graph import StateGraph, START, END
 
-from .kb_rag import query, list_contents
-from .llm import LLMClient
-from .web_search import web_search
-from .config import recall_cfg
-from .prompts import (PLANNER_SYSTEM, ANSWERER_PROMPT,
+from ..storage.vector_store import query, list_contents
+from ..llm import LLMClient
+from ..web_search import web_search
+from ..config import recall_cfg
+from ..prompts import (PLANNER_SYSTEM, ANSWERER_PROMPT,
                     ANSWERER_NO_DATA_PROMPT, REVIEWER_SYSTEM)
 
 
@@ -39,7 +39,7 @@ def _chat(system: str, user: str) -> str:
 def _get_topics() -> list[str]:
     """返回库里已有的领域列表（Planner 判断用）。优先看台账，避免每次起 chroma。"""
     try:
-        from .doc_index import load
+        from ..storage.doc_index import load
         topics = []
         for info in load().values():
             t = info.get("topic", "默认")
@@ -79,7 +79,7 @@ def overview(state: KBState) -> dict:
         contents = {}
     if not contents:
         # 向量库空 → 用台账兜底
-        from .doc_index import load
+        from ..storage.doc_index import load
         contents = {}
         for rel, info in load().items():
             t = info.get("topic", "默认")

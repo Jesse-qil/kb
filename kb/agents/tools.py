@@ -3,10 +3,10 @@
 迁移自旧项目 app/tools.py，检索改用 kb.kb_rag.query。"""
 import json
 
-from .llm import LLMClient
-from .kb_rag import query
-from .web_search import web_search as _ws
-from .prompts import TOOL_ASSISTANT_PROMPT
+from ..llm import LLMClient
+from ..storage.vector_store import query
+from ..web_search import web_search as _ws
+from ..prompts import TOOL_ASSISTANT_PROMPT
 
 
 def search_knowledge(query_text: str, topic: str = "") -> str:

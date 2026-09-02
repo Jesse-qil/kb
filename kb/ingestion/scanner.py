@@ -3,7 +3,7 @@ topic = 相对 raw 的父目录名（如 raw/notes_draft/xx.md → notes_draft�
 顶层目录 = 大领域/分类；一篇笔记一个 topic，将来可用 tags 补多标签。"""
 import hashlib
 from pathlib import Path
-from .config import raw_dir, CONFIG
+from ..config import raw_dir, CONFIG
 
 
 def _hash_of(path: Path) -> str:

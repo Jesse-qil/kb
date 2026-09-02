@@ -10,9 +10,10 @@ import sys
 
 
 def cmd_scan():
-    from . import file_scanner, doc_index
-    scan_rows = file_scanner.scan()
-    cls = file_scanner.classify(scan_rows, doc_index.load())
+    from .ingestion import scanner
+    from .storage import doc_index
+    scan_rows = scanner.scan()
+    cls = scanner.classify(scan_rows, doc_index.load())
     print(f"扫描到 {len(scan_rows)} 篇：新增{len(cls['new'])} 修改{len(cls['changed'])} 未变{len(cls['unchanged'])} 删除{len(cls['removed'])}")
     for k in ("new", "changed"):
         for rel in cls[k]:
@@ -20,12 +21,12 @@ def cmd_scan():
 
 
 def cmd_ingest():
-    from .kb_rag import ingest
+    from .ingestion.pipeline import ingest
     ingest()
 
 
 def cmd_query(q: str):
-    from .kb_rag import query
+    from .storage.vector_store import query
     hits = query(q)
     if not hits:
         print("没检索到内容")
@@ -37,7 +38,7 @@ def cmd_query(q: str):
 
 
 def cmd_list():
-    from .kb_rag import list_contents
+    from .storage.vector_store import list_contents
     for topic, files in list_contents().items():
         print(f"[目录] {topic}: {', '.join(files)}")
 
@@ -45,7 +46,7 @@ def cmd_list():
 
 
 def cmd_ask(q: str):
-    from .qa import ask
+    from .agents.single import ask
     res = ask(q)
     print(res["answer"])
     for s in res["sources"]:

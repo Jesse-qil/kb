@@ -1,9 +1,9 @@
 """问答：检索知识库 → 拼上下文 → 交给 LLM 回答（带来源）。
 复用旧项目 rag.py 的思路，但只依赖 kb 包内部函数，配置全走 kb_config.yaml。"""
-from .kb_rag import query
-from .llm import LLMClient
-from .config import recall_cfg
-from .prompts import KB_ASSISTANT_PROMPT as SYSTEM_PROMPT
+from ..storage.vector_store import query
+from ..llm import LLMClient
+from ..config import recall_cfg
+from ..prompts import KB_ASSISTANT_PROMPT as SYSTEM_PROMPT
 
 
 def ask(question: str, topic: str = "") -> dict:
