@@ -78,6 +78,8 @@
   <h1>📚 个人知识库</h1>
   <div class="actions">
     <span id="stats"></span>
+    <button onclick="document.getElementById('fileInput').click()">📤 上传笔记</button>
+    <input type="file" id="fileInput" accept=".md,.docx" multiple style="display:none" onchange="upload()">
     <button onclick="ingest()">🔄 重新导入</button>
   </div>
 </div>
@@ -137,6 +139,34 @@ function sendChoice(text) {
   const input = document.getElementById("question");
   input.value = text;
   send();
+}
+
+async function upload() {
+  const input = document.getElementById("fileInput");
+  if (!input.files.length) return;
+  const files = Array.from(input.files);
+  const names = files.map(f => f.name).join("、");
+  addMsg("📤 正在上传并导入：" + names, "user");
+  let okCount = 0, failMsg = "";
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append("file", file);
+    // topic 留空 → 后端默认 notes_draft；如需选领域可改这里
+    fd.append("topic", "notes_draft");
+    try {
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok) { okCount++; }
+      else { failMsg += (failMsg ? "；" : "") + (data.detail || "失败"); }
+    } catch (e) {
+      failMsg += (failMsg ? "；" : "") + file.name + " 请求失败";
+    }
+  }
+  addMsg(okCount > 0
+    ? "✅ 已导入 " + okCount + " 个文件（统计已刷新）"
+    : "⚠️ 上传失败：" + (failMsg || "未知错误"), "bot");
+  input.value = "";
+  stats();
 }
 
 async function ingest() {
