@@ -75,54 +75,77 @@ _ALLOWED_SUFFIX = {".md", ".docx", ".pdf"}
 
 
 @app.post("/api/upload")
-async def api_upload(file: UploadFile = File(...), auto: str = Form("0")):
-    """网页上传：默认进待审查区并 LLM 建议主题；auto=1 时直接分类入库。
-    返回: {status: pending|done, filename, suggest_topic, ingest?...}"""
-    import re
+async def api_upload(files: list[UploadFile] = File(...), auto: str = Form("0")):
+    """网页批量上传：一次收多个文件。每个文件：
+    - 算内容 md5 → 库里/pending 已有同内容 → 标 duplicate 跳过
+    - 否则默认进待审查 + LLM 建议主题；auto=1 直接分类移入 raw
+    返回 {results: [{filename, status: pending|done|duplicate|error, ...}], ingest_started?}"""
+    import hashlib, re
     from kb.config import pending_dir
-    from kb.ingestion.pending import add as pending_add, approve as pending_approve
+    from kb.ingestion.pending import add as pending_add, approve as pending_approve, find_by_hash as pending_dup
     from kb.ingestion.classifier import suggest_topic
+    from kb.ingestion.splitter import read_head
+    from kb.storage.doc_index import find_by_hash as doc_dup
 
-    suffix = pathlib_suffix(file.filename or "")
-    if suffix not in _ALLOWED_SUFFIX:
-        raise HTTPException(400, f"只支持 {'/'.join(sorted(_ALLOWED_SUFFIX))} 文件")
-    safe_name = re.sub(r'[\\/:*?"<>|]', "_", (file.filename or "upload").rsplit("/", 1)[-1].rsplit("\\", 1)[-1])
-    if not safe_name.endswith(tuple(_ALLOWED_SUFFIX)):
-        safe_name += suffix
-
-    content = await file.read()
-
-    # 文件先落 pending/（无论 auto 与否都先到这，auto 再继续走 approve）
+    results = []
+    moved_any = False
     pdir = pending_dir()
     pdir.mkdir(parents=True, exist_ok=True)
-    (pdir / safe_name).write_bytes(content)
-    print(f"[上传] 收到 {safe_name} ({len(content)} 字节)")
 
-    # LLM 建议主题：按后缀用对应解析器读文本开头（pdf 不能直接 decode）
-    from kb.ingestion.splitter import read_head
-    tmp_path = pdir / safe_name          # 文件已落盘
-    text_head = read_head(tmp_path)
-    topic = suggest_topic(text_head)
-    print(f"[分类] 建议主题: {topic or '（待定）'}")
-
-    # auto 模式：直接审查通过（移入 raw/<topic> + 入库）
-    if auto in ("1", "true", "True"):
-        if not topic:
-            topic = "默认"
+    for file in files:
+        name = file.filename or ""
         try:
-            moved = pending_approve(safe_name, topic)
-        except Exception as e:
-            raise HTTPException(500, f"自动入库失败: {e}")
-        start_bg_ingest()          # 后台入库（前端轮询 /api/ingest/progress）
-        return {"status": "done", "filename": safe_name,
-                "topic": topic, "path": moved["path"],
-                "ingest_started": True}
+            suffix = pathlib_suffix(name)
+            if suffix not in _ALLOWED_SUFFIX:
+                results.append({"filename": name, "status": "error",
+                                "error": f"只支持 {'/'.join(sorted(_ALLOWED_SUFFIX))}"})
+                continue
+            safe_name = re.sub(r'[\\/:*?"<>|]', "_", name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1])
+            if not safe_name.endswith(tuple(_ALLOWED_SUFFIX)):
+                safe_name += suffix
 
-    # 默认：登记进待审查
-    pending_add(safe_name, topic, len(content))
-    return {"status": "pending", "filename": safe_name,
-            "suggest_topic": topic, "size": len(content),
-            "tip": "已进入待审查区，确认后才会入库"}
+            content = await file.read()
+            fhash = hashlib.md5(content).hexdigest()
+
+            # ---- 内容级去重：台账已入库 or 待审查区已有同内容 ----
+            dup_doc = doc_dup(fhash)
+            if dup_doc:
+                results.append({"filename": name, "status": "duplicate",
+                                "error": f"库中已有相同内容：{dup_doc}"})
+                continue
+            dup_pending = pending_dup(fhash)
+            if dup_pending:
+                results.append({"filename": name, "status": "duplicate",
+                                "error": f"待审查区已有相同内容：{dup_pending}"})
+                continue
+
+            # 落 pending/（auto 也先落这，approve 负责移动）
+            (pdir / safe_name).write_bytes(content)
+            print(f"[上传] 收到 {safe_name} ({len(content)} 字节)")
+
+            # LLM 建议主题（按后缀解析读开头；pdf 不能直接 decode）
+            text_head = read_head(pdir / safe_name)
+            topic = suggest_topic(text_head)
+
+            if auto in ("1", "true", "True"):
+                if not topic:
+                    topic = "默认"
+                moved = pending_approve(safe_name, topic)
+                moved_any = True
+                results.append({"filename": safe_name, "status": "done",
+                                "topic": topic, "path": moved["path"]})
+            else:
+                pending_add(safe_name, topic, len(content), fhash)
+                results.append({"filename": safe_name, "status": "pending",
+                                "suggest_topic": topic, "size": len(content)})
+        except Exception as e:
+            results.append({"filename": name, "status": "error", "error": f"{type(e).__name__}: {e}"})
+
+    resp = {"results": results}
+    if moved_any:
+        start_bg_ingest()          # auto 有移动才触发一次后台入库
+        resp["ingest_started"] = True
+    return resp
 
 
 @app.get("/api/pending")

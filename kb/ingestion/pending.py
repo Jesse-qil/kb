@@ -25,17 +25,29 @@ def _save(rows: dict) -> None:
         json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def add(filename: str, suggest_topic: str, size: int) -> dict:
-    """登记一条待审查（文件本身已由 API 写入 pending/）。"""
+def add(filename: str, suggest_topic: str, size: int, content_hash: str = "") -> dict:
+    """登记一条待审查（文件本身已由 API 写入 pending/）。
+    content_hash: 内容 md5，用于待审查区内部去重。"""
     rows = _load()
     # 同名已存在 → 覆盖旧文件与记录
     rows[filename] = {
         "suggest_topic": suggest_topic,
         "size": size,
+        "hash": content_hash,
         "time": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     _save(rows)
     return rows[filename]
+
+
+def find_by_hash(content_hash: str) -> str | None:
+    """在待审查区里找相同内容 hash 的文件，返回文件名；没有返回 None。"""
+    if not content_hash:
+        return None
+    for name, info in _load().items():
+        if info.get("hash") == content_hash:
+            return name
+    return None
 
 
 def list_all() -> list[dict]:

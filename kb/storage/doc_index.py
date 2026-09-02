@@ -20,6 +20,16 @@ def save(rows: dict) -> None:
     f.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def find_by_hash(content_hash: str) -> str | None:
+    """在已入库台账里找相同内容 hash 的文档，返回其相对路径；没有返回 None。"""
+    if not content_hash:
+        return None
+    for rel, info in load().items():
+        if info.get("hash") == content_hash:
+            return rel
+    return None
+
+
 def next_id(existing: dict) -> str:
     """分配下一个未占用的编号 kb-0001 递增。"""
     used = {v.get("id", "") for v in existing.values()}

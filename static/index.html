@@ -170,29 +170,36 @@ async function upload() {
   const auto = document.getElementById("autoMode").checked;
   const names = files.map(f => f.name).join("、");
   addMsg((auto ? "🤖" : "📤") + " 正在上传" + (auto ? "（自动入库）" : "（待审查）") + "：" + names, "user");
-  let pendingNames = [], doneNames = [], failMsg = "";
-  for (const file of files) {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("auto", auto ? "1" : "0");
-    try {
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      if (res.ok) {
-        if (data.status === "pending") {
-          pendingNames.push(data.filename + (data.suggest_topic ? " → 建议[" + data.suggest_topic + "]" : " → 主题待定"));
-        } else {
-          doneNames.push(data.filename + " → [" + (data.topic || "默认") + "]");
-        }
-      } else { failMsg += (failMsg ? "；" : "") + (data.detail || "失败"); }
-    } catch (e) { failMsg += (failMsg ? "；" : "") + file.name + " 请求失败"; }
+
+  // 一次请求批量传所有文件（后端 files: list[UploadFile]）
+  const fd = new FormData();
+  files.forEach(f => fd.append("files", f));
+  fd.append("auto", auto ? "1" : "0");
+
+  let doneNames = [], pendingNames = [], dupMsg = [], errMsg = "";
+  try {
+    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    (data.results || []).forEach(r => {
+      if (r.status === "done") {
+        doneNames.push(r.filename + " → [" + (r.topic || "默认") + "]");
+      } else if (r.status === "pending") {
+        pendingNames.push(r.filename + (r.suggest_topic ? " → 建议[" + r.suggest_topic + "]" : " → 主题待定"));
+      } else if (r.status === "duplicate") {
+        dupMsg.push(r.filename + "（" + (r.error || "重复") + "）");
+      } else {
+        errMsg.push(r.filename + "：" + (r.error || "失败"));
+      }
+    });
+    if (data.ingest_started) pollIngest();
+  } catch (e) {
+    errMsg.push("请求失败：" + e);
   }
-  if (doneNames.length) {
-    addMsg("🤖 自动入库中：" + doneNames.join("、"), "bot");
-    pollIngest();
-  }
+
+  if (doneNames.length) addMsg("🤖 自动入库中：" + doneNames.join("、"), "bot");
   if (pendingNames.length) addMsg("📋 已进入待审查：" + pendingNames.join("、") + "。点击右上角「待审查」确认入库。", "bot");
-  if (failMsg) addMsg("⚠️ 失败：" + failMsg, "bot");
+  if (dupMsg.length) addMsg("🔁 已跳过重复：" + dupMsg.join("、"), "bot");
+  if (errMsg.length) addMsg("⚠️ 失败：" + errMsg.join("；"), "bot");
   input.value = "";
   refreshPending();
 }
