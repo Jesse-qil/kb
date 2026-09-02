@@ -115,6 +115,12 @@ def query(question: str, topic: str = "", top_k: int = 0) -> list[dict]:
     return hits
 
 
+
+def count() -> int:
+    """返回库里片段总数（Chroma collection.count）。"""
+    col = _client().get_or_create_collection(_COLLECTION)
+    return col.count()
+
 def list_contents() -> dict:
     """返回 {主题: [文件名...]}，用于"库里有什么"。"""
     col = _client().get_or_create_collection(_COLLECTION)

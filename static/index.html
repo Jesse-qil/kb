@@ -1,0 +1,194 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📚 个人知识库</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Microsoft YaHei", sans-serif;
+    background: #1e1e2e;
+    color: #e8e8f0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .navbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px;
+    background: #2a2a3c;
+    border-bottom: 1px solid #3a3a52;
+  }
+  .navbar h1 { font-size: 18px; font-weight: 600; color: #fff; }
+  .navbar .actions { display: flex; align-items: center; gap: 12px; }
+  .navbar button {
+    background: #4c6ef5; color: #fff; border: none;
+    padding: 6px 14px; border-radius: 8px; cursor: pointer;
+    font-size: 13px;
+  }
+  .navbar button:hover { background: #3b5bdb; }
+  #stats { font-size: 13px; color: #9aa0b4; }
+
+  .chat-wrap { flex: 1; overflow-y: auto; }
+  .chat {
+    max-width: 760px; margin: 0 auto; padding: 24px 20px 40px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .msg { max-width: 85%; padding: 12px 16px; border-radius: 12px; line-height: 1.7; white-space: pre-wrap; font-size: 15px; }
+  .user { align-self: flex-end; background: #4c6ef5; color: #fff; border-bottom-right-radius: 4px; }
+  .bot  { align-self: flex-start; background: #2a2a3c; color: #e8e8f0; border-bottom-left-radius: 4px; }
+  .source { align-self: flex-start; font-size: 12px; color: #7a8096; padding: 0 4px; }
+  .choice-box { align-self: flex-start; display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+  .choice-btn {
+    background: #2a2a3c; color: #e8e8f0; border: 1px solid #4c6ef5;
+    padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; text-align: left;
+  }
+  .choice-btn:hover { background: #3b5bdb; color: #fff; }
+  .welcome { text-align: center; color: #9aa0b4; margin-top: 15vh; font-size: 15px; }
+  .welcome h2 { color: #fff; margin-bottom: 8px; font-size: 22px; }
+
+  .input-bar { padding: 16px 24px 24px; background: #1e1e2e; }
+  .input-box {
+    max-width: 760px; margin: 0 auto;
+    display: flex; gap: 10px;
+    background: #2a2a3c;
+    border: 1px solid #3a3a52;
+    border-radius: 12px;
+    padding: 10px 14px;
+  }
+  .input-box:focus-within { border-color: #4c6ef5; }
+  #question {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: #e8e8f0; font-size: 15px;
+  }
+  #question::placeholder { color: #6a7088; }
+  #sendBtn {
+    background: #4c6ef5; color: #fff; border: none;
+    padding: 8px 18px; border-radius: 8px; cursor: pointer; font-size: 14px;
+  }
+  #sendBtn:hover { background: #3b5bdb; }
+  #sendBtn:disabled { background: #3a3a52; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<div class="navbar">
+  <h1>📚 个人知识库</h1>
+  <div class="actions">
+    <span id="stats"></span>
+    <button onclick="ingest()">🔄 重新导入</button>
+  </div>
+</div>
+
+<div class="chat-wrap">
+  <div class="chat" id="chat">
+    <div class="welcome">
+      <h2>📚 个人知识库</h2>
+      <p>问我关于你笔记的任何问题</p>
+    </div>
+  </div>
+</div>
+
+<div class="input-bar">
+  <div class="input-box">
+    <input id="question" placeholder="问点什么，比如：list 和 tuple 有什么区别？" autocomplete="off">
+    <button id="sendBtn" onclick="send()">发送</button>
+  </div>
+</div>
+
+<script>
+const chatEl = document.getElementById("chat");
+const sendBtn = document.getElementById("sendBtn");
+
+function addMsg(text, cls) {
+  const welcome = document.querySelector(".welcome");
+  if (welcome) welcome.remove();
+  const div = document.createElement("div");
+  div.className = "msg " + cls;
+
+  // 检测【选择】块 → 拆成"说明文字 + 选项按钮"
+  const m = text.match(/【选择】\n?([\s\S]*)$/);
+  if (m) {
+    div.textContent = text.replace(/【选择】\n?[\s\S]*$/, "").trim();
+    chatEl.appendChild(div);
+    // 渲染选项按钮
+    const box = document.createElement("div");
+    box.className = "choice-box";
+    m[1].split("\n").forEach(line => {
+      const t = line.replace(/^\s*\d+[.、]\s*/, "").trim();   // 去掉"1. "编号
+      if (!t) return;
+      const btn = document.createElement("button");
+      btn.className = "choice-btn";
+      btn.textContent = t;
+      btn.onclick = () => sendChoice(t);                        // 点击 → 发送
+      box.appendChild(btn);
+    });
+    chatEl.appendChild(box);
+  } else {
+    div.textContent = text;
+    chatEl.appendChild(div);
+  }
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function sendChoice(text) {
+  const input = document.getElementById("question");
+  input.value = text;
+  send();
+}
+
+async function ingest() {
+  const res = await fetch("/api/ingest", { method: "POST" });
+  const data = await res.json();
+  addMsg("📥 " + data.message, "bot");
+  stats();
+}
+
+async function stats() {
+  try {
+    const res = await fetch("/api/stats");
+    const data = await res.json();
+    document.getElementById("stats").textContent = "库内 " + data.chunks + " 片段";
+  } catch (e) { }
+}3
+
+async function send() {
+  const input = document.getElementById("question");
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = "";
+  sendBtn.disabled = true;
+  addMsg(q, "user");
+  addMsg("思考中…", "bot");
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q }),
+    });
+    const data = await res.json();
+    chatEl.lastElementChild.remove();
+    addMsg(data.answer, "bot");
+    if (data.sources && data.sources.length) {
+      const src = data.sources.map(s => s.source + (s.heading ? " · " + s.heading : "") + "（" + s.score + "）").join("；");
+      addMsg("📎 参考来源：" + src, "source");
+    }
+  } catch (err) {
+    chatEl.lastElementChild.remove();
+    addMsg("⚠️ 请求失败，请确认服务已启动", "bot");
+  }
+  sendBtn.disabled = false;
+}
+
+document.getElementById("question").addEventListener("keydown", e => {
+  if (e.key === "Enter") send();
+});
+
+stats();
+</script>
+</body>
+</html>
+
+
