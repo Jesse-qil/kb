@@ -17,3 +17,10 @@ embedding:
 recall:
   top_k: 4                 # 每次提问检索几个相关片段
   score_threshold: 0.6     # 低于此相似度视为"没找到"，弱资料不给
+
+# ===== 大模型配置（OpenAI 兼容接口，多提供商可切换） =====
+# provider: deepseek / openai / siliconflow / ollama / mock / auto
+# auto = 自动识别 .env 里配了哪家 key 就用哪家，都没有 → mock（假回答跑通流程）
+llm:
+  provider: auto
+  temperature: 0.3

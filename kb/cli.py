@@ -42,6 +42,16 @@ def cmd_list():
         print(f"[目录] {topic}: {', '.join(files)}")
 
 
+
+
+def cmd_ask(q: str):
+    from .qa import ask
+    res = ask(q)
+    print(res["answer"])
+    for s in res["sources"]:
+        print(f"  [来源] {s['source']} (相似度 {s['score']})")
+
+
 def cmd_reset():
     import shutil
     from .config import chroma_dir, KNOWLEDGE_DIR, index_file
@@ -62,6 +72,8 @@ def main():
         cmd_ingest()
     elif cmd == "query" and len(sys.argv) >= 3:
         cmd_query(" ".join(sys.argv[2:]))
+    elif cmd == "ask" and len(sys.argv) >= 3:
+        cmd_ask(" ".join(sys.argv[2:]))
     elif cmd == "list":
         cmd_list()
     elif cmd == "reset":
