@@ -58,6 +58,7 @@ app.mount("/static", StaticFiles(directory=KB_ROOT / "static"), name="static")
 
 class ChatRequest(BaseModel):
     question: str
+    session_id: str = "default"     # 前端生成，同一次会话用同一个
 
 
 class ReviewRequest(BaseModel):
@@ -209,7 +210,14 @@ def api_stats():
 def api_chat(req: ChatRequest):
     if not req.question.strip():
         raise HTTPException(400, "问题不能为空")
-    return ask(req.question)
+    from kb import session
+    # 取该会话的历史拼文本 → 传给 graph
+    history = session.get_text(req.session_id)
+    result = ask(req.question, history=history)
+    # 记入历史（用户问的 + 小齐答的）
+    session.append(req.session_id, "user", req.question)
+    session.append(req.session_id, "assistant", result.get("answer", ""))
+    return result
 
 
 if __name__ == "__main__":

@@ -85,6 +85,7 @@
     <input type="file" id="fileInput" accept=".md,.docx,.pdf" multiple style="display:none" onchange="upload()">
     <button onclick="ingest()">🔄 重新导入</button>
     <button id="pendingBtn" onclick="togglePending()" style="display:none">📋 待审查 <span id="pendingCount">0</span></button>
+    <button onclick="newSession()" title="清空当前对话记忆">🆕 新会话</button>
   </div>
 </div>
 
@@ -402,6 +403,23 @@ async function stats() {
   } catch (e) { }
 }3
 
+// ---- 会话记忆：浏览器持久保存一个会话 id ----
+function getSessionId() {
+  let sid = localStorage.getItem("kb_session_id");
+  if (!sid) {
+    sid = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    localStorage.setItem("kb_session_id", sid);
+  }
+  return sid;
+}
+
+function newSession() {
+  localStorage.removeItem("kb_session_id");
+  const chat = document.getElementById("chat");
+  chat.innerHTML = '<div class="welcome"><h2>📚 个人知识库</h2><p>问我关于你笔记的任何问题（新会话）</p></div>';
+  addMsg("🆕 已开启新会话，小齐不会再记得之前聊的。", "bot");
+}
+
 async function send() {
   const input = document.getElementById("question");
   const q = input.value.trim();
@@ -414,7 +432,7 @@ async function send() {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q }),
+      body: JSON.stringify({ question: q, session_id: getSessionId() }),
     });
     const data = await res.json();
     chatEl.lastElementChild.remove();

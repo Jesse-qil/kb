@@ -26,6 +26,7 @@ class KBState(TypedDict):
     rounds: int
     from_web: bool           # 是否走了联网兜底
     is_overview: bool        # 是否"知识库总览"类问题
+    history: str             # 之前对话的文本（main 从 session 取来传入）
 
 
 def _chat(system: str, user: str) -> str:
@@ -123,12 +124,16 @@ def answerer(state: KBState) -> dict:
         system = ANSWERER_NO_DATA_PROMPT
         user = (f"问题：{state['question']}\n\n"
                 "（知识库和网络都没找到相关资料，请如实说明，可以凭常识简单回答，但要明确说这不是笔记内容）")
+        if state.get("history"):
+            user = f"之前对话：\n{state['history']}\n\n" + user
         answer = _chat(system, user)
         print(f"[回答] 第 {state['rounds'] + 1} 轮回答完成（无资料）")
         return {"answer": answer, "rounds": state["rounds"] + 1}
     context = "\n\n".join(f"[来自 {h['source']}]\n{h['text']}" for h in state["hits"])
     system = ANSWERER_PROMPT
     user = f"问题：{state['question']}\n\n参考资料：\n{context}"
+    if state.get("history"):
+        user = f"之前对话：\n{state['history']}\n\n" + user
     if state["review_feedback"]:
         user += f"\n\n上一轮审查意见（必须按此修改）：{state['review_feedback']}"
     answer = _chat(system, user)
@@ -178,11 +183,12 @@ def build_graph():
 
 
 # ---------- 8. 对外接口 ----------
-def ask(question: str) -> dict:
+def ask(question: str, history: str = "") -> dict:
     result = build_graph().invoke({
         "question": question, "topic": "", "queries": [],
         "hits": [], "answer": "", "review_feedback": "", "rounds": 0,
         "from_web": False, "is_overview": False,
+        "history": history,          # 之前对话（可为空）
     })
     threshold = recall_cfg()["score_threshold"]
     if result.get("is_overview"):
