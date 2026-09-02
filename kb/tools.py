@@ -6,6 +6,7 @@ import json
 from .llm import LLMClient
 from .kb_rag import query
 from .web_search import web_search as _ws
+from .prompts import TOOL_ASSISTANT_PROMPT
 
 
 def search_knowledge(query_text: str, topic: str = "") -> str:
@@ -93,7 +94,7 @@ TOOL_FUNCS = {
 def run_agent_with_tools(question: str, max_rounds: int = 5) -> str:
     """让 LLM 自主决定：要不要调工具、调哪个、调几次，直到给出最终回答。"""
     messages = [
-        {"role": "system", "content": "你是知识库助手小齐。需要查笔记/算数/联网时，先用工具，再基于结果回答。"},
+        {"role": "system", "content": TOOL_ASSISTANT_PROMPT},
         {"role": "user", "content": question},
     ]
     llm = LLMClient()

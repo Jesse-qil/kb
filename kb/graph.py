@@ -11,6 +11,8 @@ from .kb_rag import query, list_contents
 from .llm import LLMClient
 from .web_search import web_search
 from .config import recall_cfg
+from .prompts import (PLANNER_SYSTEM, ANSWERER_PROMPT,
+                    ANSWERER_NO_DATA_PROMPT, REVIEWER_SYSTEM)
 
 
 # ---------- 1. 状态（Agent 之间的"快递单"） ----------
@@ -52,7 +54,7 @@ def _get_topics() -> list[str]:
 def planner(state: KBState) -> dict:
     topics = _get_topics()
     cand = "、".join(topics) if topics else "默认"
-    system = f"你是检索规划员。候选领域：{cand}。"
+    system = PLANNER_SYSTEM.format(cand=cand)
     user = f"""对问题做三件事，只输出 JSON（不要多余文字）：
     {{"overview": true/false, "topic": "领域名（必须是候选之一，都不像填 默认）", "queries": ["查询1", "查询2"]}}
     overview=true 当且仅当问题是在问"知识库里有什么/包含哪些/目录"这类总览问题。
@@ -118,14 +120,14 @@ def retriever(state: KBState) -> dict:
 # ---------- 4. Agent 3：Answerer ----------
 def answerer(state: KBState) -> dict:
     if not state["hits"]:
-        system = "你是个人知识库助手，自然亲切地回答问题。"
+        system = ANSWERER_NO_DATA_PROMPT
         user = (f"问题：{state['question']}\n\n"
                 "（知识库和网络都没找到相关资料，请如实说明，可以凭常识简单回答，但要明确说这不是笔记内容）")
         answer = _chat(system, user)
         print(f"[回答] 第 {state['rounds'] + 1} 轮回答完成（无资料）")
         return {"answer": answer, "rounds": state["rounds"] + 1}
     context = "\n\n".join(f"[来自 {h['source']}]\n{h['text']}" for h in state["hits"])
-    system = "你是个人知识库助手，自然亲切地回答问题，依据参考资料，不编造。"
+    system = ANSWERER_PROMPT
     user = f"问题：{state['question']}\n\n参考资料：\n{context}"
     if state["review_feedback"]:
         user += f"\n\n上一轮审查意见（必须按此修改）：{state['review_feedback']}"
@@ -136,8 +138,7 @@ def answerer(state: KBState) -> dict:
 
 # ---------- 5. Agent 4：Reviewer ----------
 def reviewer(state: KBState) -> dict:
-    system = ("你是答案审查员。检查回答：1)关键信息是否在参考资料中有依据 2)是否完整回答问题 3)是否通顺。"
-              "通过只输出 pass；不通过输出一句具体修改意见。")
+    system = REVIEWER_SYSTEM
     user = f"问题：{state['question']}\n\n参考资料：\n" + \
            "\n".join(f"[{h['source']}] {h['text'][:100]}" for h in state["hits"]) + \
            f"\n\n回答：\n{state['answer']}"
