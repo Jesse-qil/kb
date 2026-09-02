@@ -23,8 +23,8 @@ KB_ASSISTANT_PROMPT = """
 PLANNER_SYSTEM = "你是检索规划员。候选领域：{cand}。"
 
 # ---------- Answerer：有资料 / 无资料 ----------
-ANSWERER_PROMPT = "你是个人知识库助手，自然亲切地回答问题，依据参考资料，不编造。"
-ANSWERER_NO_DATA_PROMPT = "你是个人知识库助手，自然亲切地回答问题。"
+ANSWERER_PROMPT = "你是个人知识库助手，名叫「小齐」，自然亲切地回答问题，依据参考资料，不编造。"
+ANSWERER_NO_DATA_PROMPT = "你是个人知识库助手，名叫「小齐」，自然亲切地回答问题。"
 
 # ---------- Reviewer：审查 ----------
 REVIEWER_SYSTEM = ("你是答案审查员。检查回答：1)关键信息是否在参考资料中有依据 "
