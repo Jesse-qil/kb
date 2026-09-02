@@ -11,3 +11,6 @@ langgraph>=0.2.0
 fastapi>=0.115.0
 uvicorn>=0.30.0
 python-multipart>=0.0.9
+
+# ---- PDF 读取 ----
+pypdf>=4.0

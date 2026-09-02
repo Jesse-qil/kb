@@ -36,7 +36,7 @@ def index():
 
 
 # 允许上传的后缀白名单（防乱传；纯本地个人用，够用即可）
-_ALLOWED_SUFFIX = {".md", ".docx"}
+_ALLOWED_SUFFIX = {".md", ".docx", ".pdf"}
 
 
 @app.post("/api/upload")
@@ -63,8 +63,10 @@ async def api_upload(file: UploadFile = File(...), auto: str = Form("0")):
     (pdir / safe_name).write_bytes(content)
     print(f"[上传] 收到 {safe_name} ({len(content)} 字节)")
 
-    # LLM 建议主题（读内容前 1500 字；失败返回空串 = 待人工填）
-    text_head = content.decode("utf-8", errors="ignore")
+    # LLM 建议主题：按后缀用对应解析器读文本开头（pdf 不能直接 decode）
+    from kb.ingestion.splitter import read_head
+    tmp_path = pdir / safe_name          # 文件已落盘
+    text_head = read_head(tmp_path)
     topic = suggest_topic(text_head)
     print(f"[分类] 建议主题: {topic or '（待定）'}")
 

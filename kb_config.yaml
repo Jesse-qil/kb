@@ -4,7 +4,7 @@ scan:
   raw_root: raw            # 相对 knowledge/ 的扫描根（raw 原始层）
   compiled_root: compiled_wiki   # 范式3预留：AI 编译产物（当前不用）
   enable_compiled_layer: false    # 当前关闭编译层
-  file_suffix: [".md", ".docx"]
+  file_suffix: [".md", ".docx", ".pdf"]
   exclude_dirs: []                # 黑名单（可选）
 
 split:

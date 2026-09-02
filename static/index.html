@@ -82,7 +82,7 @@
       <input type="checkbox" id="autoMode" style="accent-color:#4c6ef5"> 自动入库
     </label>
     <button onclick="document.getElementById('fileInput').click()">📤 上传笔记</button>
-    <input type="file" id="fileInput" accept=".md,.docx" multiple style="display:none" onchange="upload()">
+    <input type="file" id="fileInput" accept=".md,.docx,.pdf" multiple style="display:none" onchange="upload()">
     <button onclick="ingest()">🔄 重新导入</button>
     <button id="pendingBtn" onclick="togglePending()" style="display:none">📋 待审查 <span id="pendingCount">0</span></button>
   </div>
