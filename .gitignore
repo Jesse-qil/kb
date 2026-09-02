@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+knowledge/vector_store/
+knowledge/chunks/
+knowledge/temp/
+knowledge/export/
+.env

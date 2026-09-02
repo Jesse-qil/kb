@@ -1,0 +1,19 @@
+# ========== kb-v2 知识库独立配置 ==========
+# 笔记目录：把 .md/.docx 丢进 raw 下的子目录即可（顶层目录 = 领域/大分类）
+scan:
+  raw_root: raw            # 相对 knowledge/ 的扫描根（raw 原始层）
+  compiled_root: compiled_wiki   # 范式3预留：AI 编译产物（当前不用）
+  enable_compiled_layer: false    # 当前关闭编译层
+  file_suffix: [".md", ".docx"]
+  exclude_dirs: []                # 黑名单（可选）
+
+split:
+  chunk_size: 750          # 每个片段最大字数
+  chunk_overlap: 120       # 相邻片段重叠字数，避免切断语义
+
+embedding:
+  model_name: "BAAI/bge-small-zh-v1.5"
+
+recall:
+  top_k: 4                 # 每次提问检索几个相关片段
+  score_threshold: 0.6     # 低于此相似度视为"没找到"，弱资料不给
