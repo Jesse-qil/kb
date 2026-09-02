@@ -5,3 +5,5 @@ knowledge/chunks/
 knowledge/temp/
 knowledge/export/
 .env
+
+.idea/
