@@ -95,6 +95,17 @@
   </div>
 </div>
 
+<div id="progWrap" style="display:none;padding:10px 24px 0">
+  <div style="max-width:760px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:#9aa0b4;margin-bottom:4px">
+      <span id="progStage">准备中…</span><span id="progPct">0%</span>
+    </div>
+    <div style="background:#2a2a3c;border-radius:8px;height:10px;overflow:hidden">
+      <div id="progBar" style="width:0%;height:100%;background:linear-gradient(90deg,#4c6ef5,#69db7c);transition:width .3s"></div>
+    </div>
+  </div>
+</div>
+
 <div class="chat-wrap">
   <div class="chat" id="chat">
     <div class="welcome">
@@ -176,12 +187,14 @@ async function upload() {
       } else { failMsg += (failMsg ? "；" : "") + (data.detail || "失败"); }
     } catch (e) { failMsg += (failMsg ? "；" : "") + file.name + " 请求失败"; }
   }
-  if (doneNames.length) addMsg("✅ 已自动入库：" + doneNames.join("、"), "bot");
+  if (doneNames.length) {
+    addMsg("🤖 自动入库中：" + doneNames.join("、"), "bot");
+    pollIngest();
+  }
   if (pendingNames.length) addMsg("📋 已进入待审查：" + pendingNames.join("、") + "。点击右上角「待审查」确认入库。", "bot");
   if (failMsg) addMsg("⚠️ 失败：" + failMsg, "bot");
   input.value = "";
   refreshPending();
-  stats();
 }
 
 // ---- 待审查面板 ----
@@ -232,10 +245,11 @@ async function reviewApprove(btn) {
     });
     const data = await res.json();
     if (res.ok) {
-      addMsg("✅ 已入库：" + file + " → [" + topic + "]", "bot");
+      addMsg("入库中：" + file + " → [" + topic + "]", "bot");
+      pollIngest();
     } else { alert("失败：" + (data.detail || "未知")); }
   } catch (e) { alert("请求失败：" + e); }
-  refreshPending(); stats();
+  refreshPending();
 }
 
 async function reviewReject(btn) {
@@ -250,11 +264,58 @@ async function reviewReject(btn) {
   refreshPending(); stats();
 }
 
+// ---- 入库进度条 ----
+let progTimer = null;
+
+function showProg(stage, pct) {
+  const w = document.getElementById("progWrap");
+  w.style.display = "block";
+  document.getElementById("progStage").textContent = stage || "";
+  document.getElementById("progPct").textContent = (pct || 0) + "%";
+  document.getElementById("progBar").style.width = (pct || 0) + "%";
+}
+
+function hideProg() {
+  const w = document.getElementById("progWrap");
+  setTimeout(() => { w.style.display = "none"; }, 400);   // 完成后再停留一会
+}
+
+// 轮询后台入库进度，直到结束
+function pollIngest(onDone) {
+  showProg("排队中…", 0);
+  if (progTimer) clearInterval(progTimer);
+  progTimer = setInterval(async () => {
+    try {
+      const res = await fetch("/api/ingest/progress");
+      const d = await res.json();
+      showProg(d.stage || "", d.percent || 0);
+      if (!d.running) {
+        clearInterval(progTimer); progTimer = null;
+        if (d.error) {
+          addMsg("⚠️ 入库出错：" + d.error, "bot");
+        } else if (d.result) {
+          const s = d.result;
+          addMsg("✅ 入库完成：新增" + s.new + " 修改" + s.changed +
+                 " 未变" + s.unchanged + " 删除" + s.removed + "，片段 " + s.chunks, "bot");
+        }
+        hideProg();
+        if (onDone) onDone();
+        stats();
+      }
+    } catch (e) { /* 忽略瞬时错误 */ }
+  }, 600);
+}
+
 async function ingest() {
-  const res = await fetch("/api/ingest", { method: "POST" });
-  const data = await res.json();
-  addMsg("📥 " + data.message, "bot");
-  stats();
+  showProg("开始导入…", 3);
+  try {
+    const res = await fetch("/api/ingest", { method: "POST" });
+    await res.json();
+    pollIngest();
+  } catch (e) {
+    hideProg();
+    addMsg("⚠️ 导入请求失败：" + e, "bot");
+  }
 }
 
 async function stats() {

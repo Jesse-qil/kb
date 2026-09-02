@@ -7,3 +7,6 @@ knowledge/export/
 .env
 
 .idea/
+
+# 大 PDF 本地保留不入库
+knowledge/raw/AI-Agent/AI-Agents-in-Depth-zh-CN.pdf

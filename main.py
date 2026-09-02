@@ -8,11 +8,46 @@ from pydantic import BaseModel
 from fastapi import File, Form, UploadFile
 
 from kb.config import KB_ROOT
-from kb.ingestion.pipeline import ingest
 from kb.storage.vector_store import list_contents
 from kb.agents.graph import ask
 
 app = FastAPI(title="kb-v2 个人知识库")
+
+# ---------- 后台入库任务状态（前端进度条轮询用） ----------
+_INGEST = {"running": False, "stage": "", "percent": 0, "result": None, "error": None}
+import threading
+
+
+def _run_ingest_bg():
+    """在后台线程执行 ingest，进度写入 _INGEST。"""
+    from kb.ingestion.pipeline import ingest as run_ingest
+    try:
+        def cb(stage, pct):
+            _INGEST["stage"] = stage
+            _INGEST["percent"] = pct
+        _INGEST["running"] = True
+        _INGEST["error"] = None
+        _INGEST["result"] = run_ingest(verbose=True, progress=cb)
+    except Exception as e:
+        _INGEST["error"] = str(e)
+    finally:
+        _INGEST["running"] = False
+        _INGEST["percent"] = 100
+
+
+def start_bg_ingest() -> bool:
+    """若没在跑则启动后台入库，返回是否新启动。"""
+    if _INGEST["running"]:
+        return False
+    t = threading.Thread(target=_run_ingest_bg, daemon=True)
+    t.start()
+    return True
+
+
+@app.get("/api/ingest/progress")
+def api_ingest_progress():
+    """前端进度条轮询：{running, stage, percent, result?, error?}"""
+    return {k: _INGEST[k] for k in ("running", "stage", "percent", "result", "error")}
 
 # 允许前端跨域（本机开发够用）
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -78,10 +113,10 @@ async def api_upload(file: UploadFile = File(...), auto: str = Form("0")):
             moved = pending_approve(safe_name, topic)
         except Exception as e:
             raise HTTPException(500, f"自动入库失败: {e}")
-        from kb.ingestion.pipeline import ingest as run_ingest
-        stats = run_ingest()
+        start_bg_ingest()          # 后台入库（前端轮询 /api/ingest/progress）
         return {"status": "done", "filename": safe_name,
-                "topic": topic, "path": moved["path"], "ingest": stats}
+                "topic": topic, "path": moved["path"],
+                "ingest_started": True}
 
     # 默认：登记进待审查
     pending_add(safe_name, topic, len(content))
@@ -108,8 +143,8 @@ async def api_review(req: ReviewRequest):
         raise HTTPException(404, str(e))
     except ValueError as e:
         raise HTTPException(400, str(e))
-    stats = run_ingest()
-    return {"ok": True, "path": moved["path"], "ingest": stats}
+    start_bg_ingest()
+    return {"ok": True, "path": moved["path"], "ingest_started": True}
 
 
 @app.delete("/api/pending")
@@ -130,8 +165,9 @@ def pathlib_suffix(name: str) -> str:
 
 @app.post("/api/ingest")
 def api_ingest():
-    """扫描 raw/ 并增量导入。"""
-    return ingest()
+    """扫描 raw/ 并增量导入（后台执行，前端轮询进度）。"""
+    started = start_bg_ingest()
+    return {"started": started, "running": _INGEST["running"]}
 
 
 @app.get("/api/stats")
