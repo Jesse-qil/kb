@@ -271,6 +271,75 @@ async function reviewReject(btn) {
   refreshPending(); stats();
 }
 
+// ---- 参考来源：按文件聚合 + 可折叠 ----
+function renderSources(sources) {
+  // 去掉欢迎块（来源一定出现在问答后）
+  const welcome = document.querySelector(".welcome");
+  if (welcome) welcome.remove();
+
+  const wrap = document.createElement("div");
+  wrap.className = "source";
+  wrap.style.cssText = "align-self:flex-start;max-width:85%;margin-top:2px";
+
+  // 按 source 文件名聚合
+  const groups = {};
+  sources.forEach(s => {
+    (groups[s.source] = groups[s.source] || []).push(s);
+  });
+  const files = Object.keys(groups);
+
+  // 折叠头：默认一行
+  const head = document.createElement("div");
+  head.style.cssText = "cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px";
+  head.innerHTML = "<span>📎 参考来源（" + files.length + " 篇）</span><span id='srcArrow' style='color:#7a8096'>▶</span>";
+  head.onclick = () => {
+    const body = wrap.querySelector(".src-body");
+    const arrow = head.querySelector("#srcArrow");
+    const open = body.style.display !== "none";
+    body.style.display = open ? "none" : "block";
+    arrow.textContent = open ? "▶" : "▼";
+  };
+  wrap.appendChild(head);
+
+  // 明细体：每篇文件一行（含片段数），展开显示该文件各片段
+  const body = document.createElement("div");
+  body.className = "src-body";
+  body.style.cssText = "display:none;margin-top:6px;border-left:2px solid #3a3a52;padding-left:10px";
+  files.forEach(fname => {
+    const items = groups[fname];
+    // 每篇一个可再展开的组
+    const fileDiv = document.createElement("div");
+    fileDiv.style.cssText = "margin:4px 0";
+    const best = Math.max(...items.map(s => s.score)).toFixed(3);
+    const fileHead = document.createElement("div");
+    fileHead.style.cssText = "cursor:pointer;color:#9aa0b4";
+    fileHead.innerHTML = "📄 " + fname + " <span style='color:#69db7c'>" + items.length + " 段 · 最高 " + best + "</span> <span style='color:#7a8096'>▶</span>";
+    fileHead.onclick = () => {
+      const list = fileDiv.querySelector(".src-list");
+      const arrow = fileHead.querySelector("span:last-child");
+      const open = list.style.display !== "none";
+      list.style.display = open ? "none" : "block";
+      arrow.textContent = open ? "▶" : "▼";
+    };
+    fileDiv.appendChild(fileHead);
+    const list = document.createElement("div");
+    list.className = "src-list";
+    list.style.cssText = "display:none;margin:2px 0 2px 14px;color:#7a8096";
+    items.forEach(s => {
+      const line = document.createElement("div");
+      line.style.cssText = "margin:2px 0;word-break:break-all";
+      const h = (s.heading || "").replace(/^#+\s*/, "").slice(0, 30);
+      line.textContent = "· " + (h || "(片段)") + " — 相似度 " + s.score.toFixed(3);
+      list.appendChild(line);
+    });
+    fileDiv.appendChild(list);
+    body.appendChild(fileDiv);
+  });
+  wrap.appendChild(body);
+  chatEl.appendChild(wrap);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
 // ---- 入库进度条 ----
 let progTimer = null;
 
@@ -351,8 +420,7 @@ async function send() {
     chatEl.lastElementChild.remove();
     addMsg(data.answer, "bot");
     if (data.sources && data.sources.length) {
-      const src = data.sources.map(s => s.source + (s.heading ? " · " + s.heading : "") + "（" + s.score + "）").join("；");
-      addMsg("📎 参考来源：" + src, "source");
+      renderSources(data.sources);
     }
   } catch (err) {
     chatEl.lastElementChild.remove();
