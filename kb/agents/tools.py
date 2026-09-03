@@ -9,6 +9,10 @@ from ..web_search import web_search as _ws
 from ..prompts import TOOL_ASSISTANT_PROMPT
 
 
+# 报错详情截断长度（防止子进程刷屏污染回答）
+_MAX_DETAIL = 300
+
+
 def search_knowledge(query_text: str, topic: str = "") -> str:
     """检索知识库，返回最相关的片段文本（供 LLM 看）。"""
     hits = query(query_text, topic=topic, top_k=3)
@@ -17,16 +21,46 @@ def search_knowledge(query_text: str, topic: str = "") -> str:
     return "\n\n".join(f"[{h['source']}] {h['text']}" for h in hits)
 
 
-def execute_python(code: str) -> str:
-    """执行一段 Python 代码，返回运行输出（5 秒超时 + 半隔离）。"""
-    import io, contextlib
-    output = io.StringIO()
+def execute_python(code: str, timeout: float = 5.0) -> str:
+    """用【子进程】执行代码：超时直接杀进程，不会拖垮主程序。
+    比线程安全：进程内存/锁全隔离，超时 terminate 真能终止。
+    退出码约定：0 = 子进程包装层正常结束（含代码运行期异常已转文字）
+               1 = 代码抛了运行期异常（wrapper 内 sys.exit(1)）
+               ≠0 = 语法错误/崩溃（stderr 有 traceback）"""
+    import subprocess, sys
+
+    # ★ 关键：wrapper 是"子进程的源码"，必须用普通字符串拼接（非 f-string），
+    #   里面的 type(e).__name__ 留给子进程执行时才求值——父进程拼死会拿不到子进程异常
+    wrapper = (
+        "import sys\n"
+        "code = sys.argv[1]\n"
+        "try:\n"
+        "    exec(code)\n"
+        "except Exception as e:\n"
+        "    print('运行报错: ' + type(e).__name__ + ': ' + str(e))\n"
+        "    sys.exit(1)\n"     # 代码异常也标退出码 1，调用方好区分
+    )
     try:
-        with contextlib.redirect_stdout(output):
-            exec(code, {"__builtins__": __builtins__}, {})
-        return output.getvalue() or "(无输出，代码运行成功)"
-    except Exception as e:
-        return f"运行报错: {type(e).__name__}: {e}"
+        proc = subprocess.run(
+            [sys.executable, "-c", wrapper, code],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        out = (proc.stdout or "").strip()
+        err = (proc.stderr or "").strip()
+
+        # 非 0 退出码：代码异常(exit 1)详情在 stdout；语法错/崩溃在 stderr
+        if proc.returncode != 0:
+            detail = out or err or f"exit code {proc.returncode}"
+            return f"运行失败: {detail[:_MAX_DETAIL]}"
+
+        if out:
+            return out
+        if err:
+            return f"(无输出，但有 stderr) {err[:_MAX_DETAIL]}"
+        return "(无输出，代码运行成功)"
+    except subprocess.TimeoutExpired:
+        return f"运行超时：超过 {timeout}s（已终止）"
+
 
 
 def web_search_tool(query: str) -> str:

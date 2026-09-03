@@ -67,9 +67,14 @@ class LLMClient:
         mock 不支持工具，返回 None（调用方当作"没有工具调用"）。"""
         if self.provider == "mock":
             return None
+
         resp = self.client.chat.completions.create(
-            model=self.model, messages=messages,
-            temperature=self.temperature, tools=tools)
+            model=self.model,
+            messages=messages,
+            temperature=self.temperature,
+            tools=tools)
+        if not resp.choices:
+            return None
         return resp.choices[0].message
 
     @staticmethod
