@@ -29,7 +29,7 @@ def execute_python(code: str, timeout: float = 5.0) -> str:
                ≠0 = 语法错误/崩溃（stderr 有 traceback）"""
     import subprocess, sys
 
-    # ★ 关键：wrapper 是"子进程的源码"，必须用普通字符串拼接（非 f-string），
+    #   关键：wrapper 是"子进程的源码"，必须用普通字符串拼接（非 f-string），
     #   里面的 type(e).__name__ 留给子进程执行时才求值——父进程拼死会拿不到子进程异常
     wrapper = (
         "import sys\n"
