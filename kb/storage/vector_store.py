@@ -19,9 +19,11 @@ def _collection():
         _COLLECTION, metadata={"hnsw:space": "cosine"})
 
 
-def delete_by_source(source: str) -> None:
-    """删除某来源文件的所有旧片段（重导前清理，避免脏数据累积）。"""
-    _collection().delete(where={"source": source})
+def delete_by_source(source: str, topic: str = "") -> None:
+    """删除某来源文件的片段。可传 topic 精确定位（防不同目录同名文件误删）。
+    不传 topic 时只按 source 删（兼容旧调用）。"""
+    where = {"source": source} if not topic else {"source": source, "topic": topic}
+    _collection().delete(where=where)
 
 
 def upsert(chunks: list[dict]) -> None:

@@ -8,7 +8,7 @@ scan:
   exclude_dirs: []                # 黑名单（可选）
 
 split:
-  chunk_size: 750          # 每个片段最大字数
+  chunk_size: 400          # 每个片段最大字数（bge-small-zh 512 token 上限，中文约 1字≈1token）
   chunk_overlap: 120       # 相邻片段重叠字数，避免切断语义
 
 embedding:

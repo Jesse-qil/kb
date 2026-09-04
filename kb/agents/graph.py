@@ -6,7 +6,6 @@ import json
 from typing import TypedDict
 
 from langgraph.graph import StateGraph, START, END
-from typer.cli import state
 
 from ..storage.vector_store import query, list_contents
 from ..llm import LLMClient
@@ -109,6 +108,7 @@ def retriever(state: KBState) -> dict:
             if key not in seen:
                 seen.add(key)
                 hits.append(h)
+    hits.sort(key=lambda h: h["score"], reverse=True)   # ★ 多查询合并后按分数降序
     if not hits or hits[0]["score"] < threshold:
         print("[检索] 知识库弱相关，转联网…")
         web = web_search(state["question"])
@@ -256,9 +256,9 @@ def ask(question: str, history: str = "") -> dict:
         return {"answer": result["answer"], "sources": [], "topic": result["topic"]}
     if result["from_web"]:
         sources = [{"source": "网络搜索", "heading": "", "score": 0}]
-    elif result["hits"] and result["hits"][0]["score"] >= threshold:
+    elif result["hits"] and max(h["score"] for h in result["hits"]) >= threshold:
         seen, sources = set(), []
-        for h in result["hits"]:
+        for h in sorted(result["hits"], key=lambda x: -x["score"]):
             key = (h["source"], h["text"][:20])
             if key not in seen:
                 seen.add(key)

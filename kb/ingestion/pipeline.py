@@ -53,15 +53,20 @@ def ingest(verbose: bool = True, progress=None) -> dict:
 
     # 已删除的文件：把它的旧片段也从向量库清掉（防残留）
     if cls["removed"]:
-        # 从台账拿旧 source 名（台账记录 key 形如 topic/文件名）
+        # 台账 key 形如 "topic/文件名" → 拆开，按 topic+source 精确定位
+        # （只按文件名删会误删其他 topic 下的同名文件）
         for rel in cls["removed"]:
-            vector_store.delete_by_source(rel.split("/")[-1])
+            topic, _, fname = rel.rpartition("/")
+            vector_store.delete_by_source(fname, topic=topic)
         _report(progress, f"清理已删除({len(cls['removed'])})", 90)
 
     if all_chunks:
-        # 重导前清掉同文件的旧片段（防脏数据）
-        for c in all_chunks:
-            vector_store.delete_by_source(c["source"])
+        # 重导前清掉该文件旧片段（防脏数据）。
+        # ★ 注意：文件可能换过 topic（如 notes_draft → AI-Agent），旧片段在旧 topic 下，
+        #   所以重导按 source 全删（不限定 topic），但按 source 去重避免重复删几十次。
+        to_clean = {c["source"] for c in all_chunks}
+        for source in to_clean:
+            vector_store.delete_by_source(source)
         # 分批向量化：30% → 85%，每批推进（embed 是主要耗时）
         total_chunks = len(all_chunks)
         done = 0
