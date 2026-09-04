@@ -66,6 +66,10 @@ class ReviewRequest(BaseModel):
     topic: str = ""
 
 
+class SessionCreateRequest(BaseModel):
+    title: str = "新会话"
+
+
 @app.get("/")
 def index():
     return RedirectResponse(url="/static/index.html")
@@ -147,6 +151,39 @@ async def api_upload(files: list[UploadFile] = File(...), auto: str = Form("0"))
         start_bg_ingest()          # auto 有移动才触发一次后台入库
         resp["ingest_started"] = True
     return resp
+
+
+# ---------- 会话管理 ----------
+@app.get("/api/sessions")
+def api_sessions():
+    """会话列表（前端多会话 UI 用）。"""
+    from kb import session
+    return {"sessions": session.list_sessions()}
+
+
+@app.post("/api/sessions")
+def api_session_create(req: SessionCreateRequest):
+    """新建会话，返回新 session_id。"""
+    from kb import session
+    sid = session.create(req.title)
+    return {"session_id": sid, "title": req.title}
+
+
+@app.delete("/api/sessions/{session_id}")
+def api_session_delete(session_id: str):
+    """删除会话（含其历史）。"""
+    from kb import session
+    ok = session.delete(session_id)
+    if not ok:
+        raise HTTPException(404, "会话不存在")
+    return {"ok": True}
+
+
+@app.get("/api/sessions/{session_id}/history")
+def api_session_history(session_id: str):
+    """某会话的完整历史（切换会话时前端加载回看）。"""
+    from kb import session
+    return {"session_id": session_id, "messages": session.get_history(session_id)}
 
 
 @app.get("/api/pending")

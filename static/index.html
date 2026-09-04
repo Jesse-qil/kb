@@ -85,7 +85,15 @@
     <input type="file" id="fileInput" accept=".md,.docx,.pdf" multiple style="display:none" onchange="upload()">
     <button onclick="ingest()">🔄 重新导入</button>
     <button id="pendingBtn" onclick="togglePending()" style="display:none">📋 待审查 <span id="pendingCount">0</span></button>
-    <button onclick="newSession()" title="清空当前对话记忆">🆕 新会话</button>
+    <div style="position:relative">
+      <button onclick="toggleSessions()" title="会话管理">💬 会话 <span id="curSessName" style="font-weight:400;color:#9aa0b4"></span></button>
+      <div id="sessionPanel" style="display:none;position:absolute;right:0;top:34px;background:#2a2a3c;border:1px solid #3a3a52;border-radius:10px;min-width:260px;max-height:320px;overflow-y:auto;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+        <div style="padding:8px 10px;border-bottom:1px solid #3a3a52">
+          <button onclick="newSession()" style="width:100%;background:#4c6ef5;color:#fff;border:none;padding:6px;border-radius:8px;cursor:pointer">＋ 新建会话</button>
+        </div>
+        <div id="sessionList" style="padding:4px"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -403,21 +411,92 @@ async function stats() {
   } catch (e) { }
 }3
 
-// ---- 会话记忆：浏览器持久保存一个会话 id ----
+// ---- 多会话管理：会话列表在后端（持久化），当前会话 id 存 localStorage ----
 function getSessionId() {
   let sid = localStorage.getItem("kb_session_id");
-  if (!sid) {
-    sid = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    localStorage.setItem("kb_session_id", sid);
-  }
+  if (!sid) { sid = "s_demo_default"; }
   return sid;
 }
 
-function newSession() {
-  localStorage.removeItem("kb_session_id");
+function setCurSession(sid, name) {
+  localStorage.setItem("kb_session_id", sid);
+  const el = document.getElementById("curSessName");
+  if (el) el.textContent = name ? " · " + name.slice(0, 8) : "";
+}
+
+async function newSession() {
+  try {
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "新会话" }),
+    });
+    const data = await res.json();
+    setCurSession(data.session_id, data.title);
+    resetChatArea();
+    addMsg("🆕 已创建新会话，之前的会话还在列表里。", "bot");
+    loadSessionList();
+  } catch (e) { alert("创建会话失败：" + e); }
+}
+
+// 切换会话：清空聊天区（历史从后端按需加载，UI 简单化：只显示当前会话新对话）
+async function switchSession(sid, title) {
+  setCurSession(sid, title);
+  resetChatArea();
+  addMsg("已切换到会话「" + (title || "新会话").slice(0, 15) + "」，开始提问吧。", "bot");
+  document.getElementById("sessionPanel").style.display = "none";
+}
+
+function resetChatArea() {
   const chat = document.getElementById("chat");
-  chat.innerHTML = '<div class="welcome"><h2>📚 个人知识库</h2><p>问我关于你笔记的任何问题（新会话）</p></div>';
-  addMsg("🆕 已开启新会话，小齐不会再记得之前聊的。", "bot");
+  chat.innerHTML = '<div class="welcome"><h2>📚 个人知识库</h2><p>问我关于你笔记的任何问题</p></div>';
+}
+
+function toggleSessions() {
+  const p = document.getElementById("sessionPanel");
+  p.style.display = p.style.display === "none" ? "block" : "none";
+  if (p.style.display !== "none") loadSessionList();
+}
+
+async function loadSessionList() {
+  try {
+    const res = await fetch("/api/sessions");
+    const data = await res.json();
+    const cur = getSessionId();
+    const box = document.getElementById("sessionList");
+    const list = data.sessions || [];
+    if (!list.length) { box.innerHTML = "<div style='color:#7a8096;font-size:13px;padding:8px'>还没有会话</div>"; return; }
+    box.innerHTML = "";
+    list.forEach(s => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;cursor:pointer";
+      if (s.id === cur) row.style.background = "#3a3a52";
+      row.innerHTML =
+        "<div style='flex:1;overflow:hidden' onclick='switchSession("" + s.id + "","" + (s.title || "").replace(/"/g, "") + "")'>" +
+          "<div style='font-size:13px;color:#e8e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>" + (s.title || "新会话") + "</div>" +
+          "<div style='font-size:11px;color:#7a8096'>" + s.msg_count + " 条</div>" +
+        "</div>" +
+        "<button onclick='event.stopPropagation();deleteSession("" + s.id + "")' style='background:none;border:none;color:#ff8787;cursor:pointer;font-size:13px' title='删除'>✕</button>";
+      box.appendChild(row);
+    });
+    // 显示当前会话名
+    const curS = list.find(x => x.id === cur);
+    const el = document.getElementById("curSessName");
+    if (el) el.textContent = curS ? " · " + curS.title.slice(0, 8) : "";
+  } catch (e) { /* 忽略 */ }
+}
+
+async function deleteSession(sid) {
+  if (!confirm("删除这个会话及其历史？")) return;
+  try {
+    await fetch("/api/sessions/" + encodeURIComponent(sid), { method: "DELETE" });
+    if (getSessionId() === sid) {
+      // 删的是当前会话 → 回默认
+      setCurSession("s_demo_default", "");
+      resetChatArea();
+    }
+    loadSessionList();
+  } catch (e) { }
 }
 
 async function send() {
@@ -453,6 +532,7 @@ document.getElementById("question").addEventListener("keydown", e => {
 
 stats();
 refreshPending();
+loadSessionList();
 </script>
 </body>
 </html>
