@@ -10,3 +10,7 @@ knowledge/export/
 
 # 大 PDF 本地保留不入库
 knowledge/raw/AI-Agent/AI-Agents-in-Depth-zh-CN.pdf
+
+# 会话历史（运行时数据，不入库）
+knowledge/sessions/
+knowledge/memory/

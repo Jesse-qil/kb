@@ -1,35 +1,111 @@
 # -*- coding: utf-8 -*-
-"""会话记忆（短期上下文）：按 session_id 存最近 N 轮对话。
-状态层：只管"存历史/取历史/裁剪"，不决定怎么用历史（那是 agent 层的事）。
-内存版：服务重启后历史清空。"""
+"""会话管理（升级版）：多会话 + 文件持久化。
+- 每个会话存 knowledge/sessions/s_<id>.json：完整历史 + 标题 + 创建时间
+- 服务重启历史不丢
+- get_text() 仍只取最近 N 轮喂 prompt（窗口），但文件里保留完整历史
+状态层：只管存取，不决定怎么用。"""
+import json
 import threading
 import time
+import uuid
+from pathlib import Path
 
-# session_id -> [{role, content, time}, ...]（只存 user/assistant）
-_HISTORY: dict[str, list[dict]] = {}
+from .config import KNOWLEDGE_DIR
+
+_SESSIONS_DIR = KNOWLEDGE_DIR / "sessions"
 _LOCK = threading.Lock()
 
-MAX_TURNS = 6          # 保留最近几轮（1 轮 = 一问一答）
-_MAX_MSGS = MAX_TURNS * 2
+MAX_TURNS = 6          # 喂给 LLM 的窗口轮数（不是存储上限！）
 
 
+def _dir() -> Path:
+    _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    return _SESSIONS_DIR
+
+
+def _path(session_id: str) -> Path:
+    # 防目录穿越：只接受我们生成的 id（s_xxxx）
+    safe = session_id.replace("/", "_").replace("\\", "_")
+    return _dir() / f"s_{safe}.json"
+
+
+def _load(session_id: str) -> dict:
+    p = _path(session_id)
+    if not p.exists():
+        return {"id": session_id, "messages": [], "title": "新会话",
+                "created": time.time()}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {"id": session_id, "messages": [], "title": "新会话",
+                "created": time.time()}
+
+
+def _save(session: dict) -> None:
+    _path(session["id"]).write_text(
+        json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ---------- 会话级操作 ----------
+def create(title: str = "新会话") -> str:
+    """新建会话，返回 session_id（形如 s_xxxxxxxx）。"""
+    sid = "s_" + uuid.uuid4().hex[:10]
+    _save({"id": sid, "messages": [], "title": title, "created": time.time()})
+    return sid
+
+
+def list_sessions() -> list[dict]:
+    """返回会话列表（按创建时间倒序）：[{id, title, created, msg_count}]"""
+    out = []
+    with _LOCK:
+        for p in _dir().glob("s_*.json"):
+            try:
+                s = json.loads(p.read_text(encoding="utf-8"))
+                out.append({
+                    "id": s["id"],
+                    "title": s.get("title", "新会话"),
+                    "created": s.get("created", 0),
+                    "msg_count": len(s.get("messages", [])),
+                })
+            except Exception:
+                continue
+    out.sort(key=lambda x: -x["created"])
+    return out
+
+
+def delete(session_id: str) -> bool:
+    """删除会话文件。"""
+    p = _path(session_id)
+    if p.exists():
+        with _LOCK:
+            p.unlink()
+        return True
+    return False
+
+
+# ---------- 消息级操作 ----------
 def append(session_id: str, role: str, content: str) -> None:
-    """记一条消息；超过轮数上限裁掉最旧的。"""
+    """记一条消息（保留完整历史，不再裁剪丢弃）。"""
     if not session_id or not content:
         return
     with _LOCK:
-        msgs = _HISTORY.setdefault(session_id, [])
-        msgs.append({"role": role, "content": content, "time": time.time()})
-        # 只留最近 N 轮，避免 prompt 无限膨胀
-        if len(msgs) > _MAX_MSGS:
-            del msgs[: len(msgs) - _MAX_MSGS]
+        s = _load(session_id)
+        # 第一条用户消息自动当标题（截断）
+        if not s["messages"] and role == "user":
+            s["title"] = content.replace("\n", " ")[:20]
+        s["messages"].append({"role": role, "content": content,
+                              "time": time.time()})
+        _save(s)
+
+
+def get_history(session_id: str) -> list[dict]:
+    """返回完整历史消息列表（前端回看用）。"""
+    return _load(session_id).get("messages", [])
 
 
 def get_text(session_id: str, max_turns: int = MAX_TURNS) -> str:
-    """把历史拼成给 LLM 看的一段文本（按时间从旧到新）。
-    例：我：xxx\n小齐：xxx\n...（截断为最近 max_turns 轮）"""
-    with _LOCK:
-        msgs = _HISTORY.get(session_id, [])
+    """把【最近 max_turns 轮】拼成给 LLM 的文本（窗口裁剪只在这发生）。"""
+    msgs = get_history(session_id)
     if len(msgs) > max_turns * 2:
         msgs = msgs[-max_turns * 2:]
     if not msgs:
@@ -37,11 +113,14 @@ def get_text(session_id: str, max_turns: int = MAX_TURNS) -> str:
     lines = []
     for m in msgs:
         who = "我" if m["role"] == "user" else "小齐"
-        text = m["content"].replace("\n", " ")[:200]   # 单条截断，防爆
+        text = m["content"].replace("\n", " ")[:200]
         lines.append(f"{who}：{text}")
     return "\n".join(lines)
 
 
 def clear(session_id: str) -> None:
+    """清空某会话消息（保留会话文件）。"""
     with _LOCK:
-        _HISTORY.pop(session_id, None)
+        s = _load(session_id)
+        s["messages"] = []
+        _save(s)
