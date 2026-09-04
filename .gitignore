@@ -14,3 +14,5 @@ knowledge/raw/AI-Agent/AI-Agents-in-Depth-zh-CN.pdf
 # 会话历史（运行时数据，不入库）
 knowledge/sessions/
 knowledge/memory/
+
+.workbuddy/
