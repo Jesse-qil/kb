@@ -5,6 +5,8 @@ import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.responses import StreamingResponse
+import json
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastapi import File, Form, UploadFile
@@ -344,6 +346,56 @@ def api_chat(req: ChatRequest):
     except Exception:
         pass
     return result
+
+
+class ChatStreamRequest(BaseModel):
+    question: str
+    session_id: str = "s_demo_default"
+
+
+@app.post("/api/chat/stream")
+def api_chat_stream(req: ChatStreamRequest):
+    """SSE 流式问答：前端按事件渲染（打字机效果）。
+    事件流：{"type":"start"} → status* / delta* → {"type":"done"|"error"}
+    """
+    if not req.question.strip():
+        raise HTTPException(400, "问题不能为空")
+    from kb import session
+    from kb.agents.graph import ask_stream
+    history = session.get_text(req.session_id)
+    final = {"answer": ""}
+
+    def gen():
+        yield "data: " + json.dumps({"type": "start"}, ensure_ascii=False) + "\n\n"
+        try:
+            for ev in ask_stream(req.question, history=history):
+                if ev.get("type") == "done":
+                    final["answer"] = ev.get("answer", "")
+                yield "data: " + json.dumps(ev, ensure_ascii=False) + "\n\n"
+        except Exception as e:
+            yield "data: " + json.dumps(
+                {"type": "error", "content": f"{type(e).__name__}: {e}"},
+                ensure_ascii=False) + "\n\n"
+        # 记入会话历史 + 长期记忆提炼（与 /api/chat 对齐，静默失败不影响主流程）
+        try:
+            session.append(req.session_id, "user", req.question)
+            session.append(req.session_id, "assistant", final["answer"])
+        except Exception:
+            pass
+        try:
+            from kb import memory
+            from kb.llm import LLMClient
+            memory.update_from_conversation(req.question, final["answer"], LLMClient())
+        except Exception:
+            pass
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache",
+                 "X-Accel-Buffering": "no",
+                 "Connection": "keep-alive"},
+    )
 
 
 if __name__ == "__main__":

@@ -6,6 +6,8 @@ import json
 from typing import TypedDict
 
 from langgraph.graph import StateGraph, START, END
+import queue
+import threading
 
 from ..storage.vector_store import query, list_contents
 from ..llm import LLMClient
@@ -37,6 +39,29 @@ def _chat(system: str, user: str) -> str:
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ])
+
+
+# 流式回调挂载点（threading.local：多请求并发互不串扰）
+_stream_local = threading.local()
+
+
+def _get_delta_cb():
+    """当前线程的 delta 回调（ask_stream 设置，answerer 读取）。"""
+    return getattr(_stream_local, "cb", None)
+
+
+def _chat_stream(system: str, user: str) -> str:
+    """流式生成完整文本：LLM 增量同时推给前端回调，返回拼接结果。"""
+    parts = []
+    for delta in LLMClient().chat_stream([
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]):
+        parts.append(delta)
+        cb = _get_delta_cb()
+        if cb:
+            cb(delta)
+    return "".join(parts)
 
 
 def _append_profile(system: str) -> str:
@@ -235,7 +260,7 @@ def answerer(state: KBState) -> dict:
 
         if state.get("history"):
             user = f"之前对话：\n{state['history']}\n\n" + user
-        answer = _chat(system, user)
+        answer = _chat_stream(system, user) if _get_delta_cb() else _chat(system, user)
         print(f"[回答] 第 {state['rounds'] + 1} 轮回答完成（无资料）")
         return {"answer": answer, "rounds": state["rounds"] + 1}
     context = "\n\n".join(f"[来自 {h['source']}]\n{h['text']}" for h in state["hits"])
@@ -247,7 +272,7 @@ def answerer(state: KBState) -> dict:
         user = f"之前对话：\n{state['history']}\n\n" + user
     if state["review_feedback"]:
         user += f"\n\n上一轮审查意见（必须按此修改）：{state['review_feedback']}"
-    answer = _chat(system, user)
+    answer = _chat_stream(system, user) if _get_delta_cb() else _chat(system, user)
     print(f"[回答] 第 {state['rounds'] + 1} 轮回答完成")
     return {"answer": answer, "rounds": state["rounds"] + 1}
 
@@ -322,6 +347,82 @@ def ask(question: str, history: str = "") -> dict:
     else:
         sources = []
     return {"answer": result["answer"], "sources": sources, "topic": result["topic"]}
+
+
+
+
+def ask_stream(question: str, history: str = ""):
+    """流式问答：yield 事件 dict，供 SSE 推送（打字机效果）。
+    事件：
+      {"type":"status","stage":"规划问题|检索笔记|调用工具|生成回答|审查回答|整理目录|第N轮重写"}
+      {"type":"delta","content":"..."}       # 回答增量
+      {"type":"done","answer":"...","sources":[...],"topic":"..."}
+      {"type":"error","content":"..."}
+    answerer 的 LLM 增量通过 threading.local 回调注入队列，主线程实时 yield。
+    """
+    q: "queue.Queue" = queue.Queue()
+
+    def emit(ev: dict) -> None:
+        q.put(ev)
+
+    def runner() -> None:
+        graph = build_graph()
+        last_answer, hits, from_web, topic = "", [], False, ""
+        try:
+            _stream_local.cb = lambda text: emit({"type": "delta", "content": text})
+            state = {
+                "question": question, "topic": "", "tags": [], "queries": [],
+                "hits": [], "answer": "", "review_feedback": "", "rounds": 0,
+                "from_web": False, "is_overview": False, "history": history,
+            }
+            stage_names = {
+                "planner": "规划问题", "overview": "整理知识库目录",
+                "retriever": "检索笔记", "tool_agent": "调用工具",
+                "answerer": "生成回答", "reviewer": "审查回答",
+            }
+            for step in graph.stream(state):
+                for node, updates in step.items():
+                    if node == "answerer" and updates.get("rounds", 1) > 1:
+                        emit({"type": "status", "stage": f"第{updates['rounds']}轮重写"})
+                    else:
+                        emit({"type": "status", "stage": stage_names.get(node, node)})
+                    if node == "answerer" and updates.get("answer"):
+                        last_answer = updates["answer"]
+                    if node == "retriever":
+                        hits = updates.get("hits") or []
+                        from_web = updates.get("from_web", False)
+                    if node == "planner":
+                        topic = updates.get("topic", "")
+                    if node == "overview":
+                        last_answer = updates.get("answer", "")
+        except Exception as e:
+            emit({"type": "error", "content": f"{type(e).__name__}: {e}"})
+            q.put(None)
+            return
+        finally:
+            _stream_local.cb = None
+
+        threshold = recall_cfg()["score_threshold"]
+        if from_web:
+            sources = [{"source": "网络搜索", "heading": "", "score": 0}]
+        elif hits and max(h["score"] for h in hits) >= threshold:
+            seen, sources = set(), []
+            for h in sorted(hits, key=lambda x: -x["score"]):
+                key = (h["source"], h["text"][:20])
+                if key not in seen:
+                    seen.add(key)
+                    sources.append({"source": h["source"], "heading": h.get("heading", ""), "score": h["score"]})
+        else:
+            sources = []
+        emit({"type": "done", "answer": last_answer, "sources": sources, "topic": topic})
+        q.put(None)
+
+    threading.Thread(target=runner, daemon=True).start()
+    while True:
+        ev = q.get()
+        if ev is None:
+            break
+        yield ev
 
 
 if __name__ == "__main__":

@@ -74,6 +74,24 @@ class LLMClient:
             model=self.model, messages=messages, temperature=self.temperature)
         return resp.choices[0].message.content
 
+    def chat_stream(self, messages: list[dict]):
+        """流式对话：逐段 yield 增量文本（打字机效果用）。
+        mock 或异常时一次性 yield 完整结果，保证调用方流程不中断。"""
+        if self.provider == "mock":
+            yield self.mock_answer
+            return
+        try:
+            stream = self.client.chat.completions.create(
+                model=self.model, messages=messages,
+                temperature=self.temperature, stream=True)
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta:
+                    piece = chunk.choices[0].delta.content
+                    if piece:
+                        yield piece
+        except Exception as e:
+            yield f"\n[流式输出中断：{type(e).__name__}]"
+
     def chat_with_tools(self, messages: list[dict], tools: list[dict]):
         """带工具注册表的对话：返回完整 message 对象（可能含 .tool_calls）。
         mock 不支持工具，返回 None（调用方当作"没有工具调用"）。"""

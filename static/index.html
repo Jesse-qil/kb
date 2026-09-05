@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -6,117 +6,267 @@
 <title>📚 个人知识库</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
-    font-family: -apple-system, "Microsoft YaHei", sans-serif;
-    background: #1e1e2e;
-    color: #e8e8f0;
-    height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(1200px 500px at 20% -10%, #16233f 0%, transparent 60%),
+                radial-gradient(1000px 400px at 85% 0%, #12203a 0%, transparent 55%),
+                #0b1220;
+    color: #e6ecf5;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
+
+  /* ===== 顶栏 ===== */
   .navbar {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 24px;
-    background: #2a2a3c;
-    border-bottom: 1px solid #3a3a52;
+    padding: 12px 22px;
+    background: rgba(13, 20, 38, 0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    z-index: 20;
   }
-  .navbar h1 { font-size: 18px; font-weight: 600; color: #fff; }
-  .navbar .actions { display: flex; align-items: center; gap: 12px; }
-  .navbar button {
-    background: #4c6ef5; color: #fff; border: none;
-    padding: 6px 14px; border-radius: 8px; cursor: pointer;
-    font-size: 13px;
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand-logo {
+    width: 32px; height: 32px; border-radius: 9px; flex: 0 0 auto;
+    background: linear-gradient(135deg, #2f6fed, #5aa2f8);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; box-shadow: 0 4px 14px rgba(47, 111, 237, 0.35);
   }
-  .navbar button:hover { background: #3b5bdb; }
-  #stats { font-size: 13px; color: #9aa0b4; }
+  .brand h1 { font-size: 16px; font-weight: 600; color: #f2f6fc; white-space: nowrap; }
+  .navbar .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .navbar button, .btn {
+    background: rgba(255, 255, 255, 0.07); color: #dbe4f0; border: 1px solid rgba(255,255,255,0.1);
+    padding: 6px 12px; border-radius: 9px; cursor: pointer; font-size: 12.5px;
+    transition: background .18s, border-color .18s, transform .05s;
+    white-space: nowrap;
+  }
+  .navbar button:hover, .btn:hover { background: rgba(255,255,255,0.13); border-color: rgba(90,162,248,0.45); }
+  .navbar button:active { transform: scale(0.97); }
+  #stats { font-size: 12px; color: #8b98ad; }
+  .dot-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+    background: #ff6b6b; color: #fff; font-size: 10.5px; font-weight: 600; margin-left: 2px;
+  }
 
-  .chat-wrap { flex: 1; overflow-y: auto; }
+  /* ===== 待审查 / 进度面板 ===== */
+  .panel {
+    display: none; background: rgba(15, 23, 42, 0.92);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    padding: 12px 22px; z-index: 15;
+  }
+  .panel-inner { max-width: 880px; margin: 0 auto; }
+  .panel h3 { font-size: 14px; color: #e6ecf5; margin-bottom: 10px; font-weight: 600; }
+  .pending-row {
+    display: flex; align-items: center; gap: 8px; padding: 7px 0;
+    border-bottom: 1px dashed rgba(255,255,255,0.08); flex-wrap: wrap;
+  }
+  .pending-row .fname { flex: 0 0 auto; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .pending-row input {
+    flex: 1; min-width: 120px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 7px; padding: 5px 9px; color: #e6ecf5; font-size: 12.5px; outline: none;
+  }
+  .pending-row input:focus { border-color: #2f6fed; }
+  .tag-chip { background: rgba(47,111,237,0.16); border: 1px solid rgba(47,111,237,0.3); color: #9cc0ff; border-radius: 5px; padding: 1px 7px; margin-right: 4px; font-size: 11px; }
+  .prog-card { max-width: 880px; margin: 0 auto; }
+  .prog-top { display: flex; justify-content: space-between; font-size: 12px; color: #8b98ad; margin-bottom: 5px; }
+  .prog-bar { background: rgba(255,255,255,0.07); border-radius: 7px; height: 9px; overflow: hidden; }
+  .prog-fill {
+    width: 0%; height: 100%;
+    background: linear-gradient(90deg, #2f6fed, #5aa2f8);
+    transition: width .3s; border-radius: 7px;
+  }
+  .prog-bottom { display: flex; justify-content: space-between; font-size: 11px; color: #6b7a90; margin-top: 6px; align-items: center; }
+  .prog-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 62%; }
+
+  /* ===== 聊天区 ===== */
+  .chat-wrap { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+  .chat-wrap::-webkit-scrollbar { width: 8px; }
+  .chat-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
   .chat {
-    max-width: 760px; margin: 0 auto; padding: 24px 20px 40px;
-    display: flex; flex-direction: column; gap: 20px;
+    max-width: 880px; margin: 0 auto; padding: 26px 22px 40px;
+    display: flex; flex-direction: column; gap: 18px;
   }
-  .msg { max-width: 85%; padding: 12px 16px; border-radius: 12px; line-height: 1.7; white-space: pre-wrap; font-size: 15px; }
-  .user { align-self: flex-end; background: #4c6ef5; color: #fff; border-bottom-right-radius: 4px; }
-  .bot  { align-self: flex-start; background: #2a2a3c; color: #e8e8f0; border-bottom-left-radius: 4px; }
-  .source { align-self: flex-start; font-size: 12px; color: #7a8096; padding: 0 4px; }
-  .choice-box { align-self: flex-start; display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
-  .choice-btn {
-    background: #2a2a3c; color: #e8e8f0; border: 1px solid #4c6ef5;
-    padding: 8px 14px; border-radius: 8px; cursor: pointer;
-    font-size: 13px; text-align: left;
+  .row { display: flex; gap: 10px; align-items: flex-start; max-width: 92%; }
+  .row.user { align-self: flex-end; flex-direction: row-reverse; }
+  .row.bot { align-self: flex-start; }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 10px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.3);
   }
-  .choice-btn:hover { background: #3b5bdb; color: #fff; }
-  .welcome { text-align: center; color: #9aa0b4; margin-top: 15vh; font-size: 15px; }
-  .welcome h2 { color: #fff; margin-bottom: 8px; font-size: 22px; }
+  .avatar.user-av { background: linear-gradient(135deg, #2f6fed, #5aa2f8); }
+  .avatar.bot-av { background: linear-gradient(135deg, #1e2b45, #2c3d5e); border: 1px solid rgba(255,255,255,0.1); }
+  .bubble {
+    padding: 12px 16px; border-radius: 14px; line-height: 1.75;
+    font-size: 14.5px; word-break: break-word; min-width: 0;
+  }
+  .bubble.user {
+    background: linear-gradient(135deg, #2f6fed, #3579f5);
+    color: #fff; border-bottom-right-radius: 5px;
+    box-shadow: 0 4px 16px rgba(47, 111, 237, 0.28);
+  }
+  .bubble.bot {
+    background: rgba(255,255,255,0.045);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-bottom-left-radius: 5px;
+  }
+  .bubble-text { white-space: pre-wrap; }
+  .cursor {
+    display: inline-block; width: 8px; height: 16px; margin-left: 2px;
+    background: #5aa2f8; border-radius: 2px; vertical-align: -2px;
+    animation: blink 0.9s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .status-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .status-chip {
+    font-size: 11px; color: #9cc0ff; background: rgba(47,111,237,0.12);
+    border: 1px solid rgba(47,111,237,0.25); border-radius: 20px; padding: 2px 10px;
+    animation: chipIn .25s ease;
+  }
+  @keyframes chipIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
-  .input-bar { padding: 16px 24px 24px; background: #1e1e2e; }
-  .input-box {
-    max-width: 760px; margin: 0 auto;
-    display: flex; gap: 10px;
-    background: #2a2a3c;
-    border: 1px solid #3a3a52;
-    border-radius: 12px;
-    padding: 10px 14px;
+  /* ===== Markdown 轻渲染 ===== */
+  .md-h1 { font-size: 16px; font-weight: 700; margin: 6px 0 4px; color: #f2f6fc; }
+  .md-h2 { font-size: 15px; font-weight: 600; margin: 5px 0 3px; color: #e6ecf5; }
+  .md-h3 { font-size: 14px; font-weight: 600; margin: 4px 0 2px; color: #e6ecf5; }
+  .md-li { margin: 2px 0; padding-left: 4px; }
+  .md-table { border-collapse: collapse; margin: 6px 0; width: 100%; font-size: 13px; }
+  .md-table th, .md-table td {
+    border: 1px solid rgba(255,255,255,0.13); padding: 5px 10px; text-align: left;
   }
-  .input-box:focus-within { border-color: #4c6ef5; }
+  .md-table th { background: rgba(47,111,237,0.14); color: #cfe0ff; font-weight: 600; }
+  .md-table tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
+  .code { margin: 6px 0; }
+  .code code {
+    display: block; padding: 10px 13px; border-radius: 9px;
+    background: #0d1428; border: 1px solid rgba(255,255,255,0.08);
+    font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px;
+    color: #b9d2f8; overflow-x: auto; white-space: pre; line-height: 1.6;
+  }
+  .inline {
+    font-family: Consolas, monospace; font-size: 12.5px; color: #ffd08a;
+    background: rgba(255,255,255,0.07); border-radius: 4px; padding: 0 5px;
+  }
+
+  /* ===== 来源折叠 ===== */
+  .src-card { align-self: flex-start; max-width: 92%; margin-top: -6px; }
+  .src-head {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+    font-size: 12px; color: #8b98ad; background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.09); border-radius: 20px; padding: 5px 13px;
+    transition: background .15s;
+  }
+  .src-head:hover { background: rgba(255,255,255,0.1); }
+  .src-body { margin-top: 8px; border-left: 2px solid rgba(47,111,237,0.35); padding-left: 13px; }
+  .src-file { margin: 6px 0; }
+  .src-file-head { cursor: pointer; color: #9cc0ff; font-size: 12.5px; }
+  .src-file-head:hover { color: #c5dcff; }
+  .src-best { color: #63d48f; }
+  .src-list { margin: 3px 0 3px 13px; color: #7d8ba1; font-size: 12px; }
+  .src-list div { margin: 2px 0; word-break: break-all; }
+
+  /* ===== 欢迎页 ===== */
+  .welcome { text-align: center; margin-top: 12vh; }
+  .welcome .wl-logo {
+    width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 18px;
+    background: linear-gradient(135deg, #2f6fed, #5aa2f8);
+    display: flex; align-items: center; justify-content: center; font-size: 30px;
+    box-shadow: 0 10px 34px rgba(47, 111, 237, 0.4);
+  }
+  .welcome h2 { font-size: 21px; font-weight: 600; color: #f2f6fc; margin-bottom: 8px; }
+  .welcome p { color: #7d8ba1; font-size: 14px; }
+  .welcome .sugg { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+  .sugg-btn {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    color: #b9c8dd; padding: 7px 15px; border-radius: 20px; font-size: 12.5px; cursor: pointer;
+    transition: all .18s;
+  }
+  .sugg-btn:hover { border-color: #2f6fed; color: #d7e5ff; background: rgba(47,111,237,0.1); }
+
+  /* ===== 输入区 ===== */
+  .input-bar { padding: 14px 22px 20px; }
+  .input-box {
+    max-width: 880px; margin: 0 auto;
+    display: flex; align-items: flex-end; gap: 10px;
+    background: rgba(255,255,255,0.055);
+    border: 1px solid rgba(255,255,255,0.11);
+    border-radius: 16px; padding: 10px 12px 10px 16px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .input-box:focus-within {
+    border-color: rgba(47, 111, 237, 0.65);
+    box-shadow: 0 0 0 4px rgba(47, 111, 237, 0.12), 0 6px 26px rgba(0,0,0,0.25);
+  }
   #question {
     flex: 1; background: transparent; border: none; outline: none;
-    color: #e8e8f0; font-size: 15px;
+    color: #e6ecf5; font-size: 14.5px; resize: none;
+    font-family: inherit; max-height: 130px; padding: 4px 0;
   }
-  #question::placeholder { color: #6a7088; }
+  #question::placeholder { color: #5d6b82; }
   #sendBtn {
-    background: #4c6ef5; color: #fff; border: none;
-    padding: 8px 18px; border-radius: 8px; cursor: pointer; font-size: 14px;
+    background: linear-gradient(135deg, #2f6fed, #3d82f7); color: #fff; border: none;
+    padding: 9px 20px; border-radius: 11px; cursor: pointer; font-size: 14px; font-weight: 500;
+    transition: all .18s; flex: 0 0 auto; box-shadow: 0 4px 14px rgba(47,111,237,0.3);
   }
-  #sendBtn:hover { background: #3b5bdb; }
-  #sendBtn:disabled { background: #3a3a52; cursor: not-allowed; }
+  #sendBtn:hover { filter: brightness(1.08); }
+  #sendBtn:disabled { background: #2a3a57; color: #6b7a90; cursor: not-allowed; box-shadow: none; }
+
+  @media (max-width: 640px) {
+    .navbar { padding: 10px 14px; }
+    .brand h1 { font-size: 14px; }
+    .chat { padding: 18px 14px 30px; }
+    .row { max-width: 100%; }
+    .bubble { font-size: 14px; padding: 10px 13px; }
+  }
 </style>
 </head>
 <body>
 
 <div class="navbar">
-  <h1>📚 个人知识库</h1>
+  <div class="brand">
+    <div class="brand-logo">📚</div>
+    <h1>个人知识库</h1>
+  </div>
   <div class="actions">
     <span id="stats"></span>
-    <label style="font-size:13px;color:#9aa0b4;display:flex;align-items:center;gap:4px;cursor:pointer">
-      <input type="checkbox" id="autoMode" style="accent-color:#4c6ef5"> 自动入库
+    <label style="font-size:12px;color:#8b98ad;display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">
+      <input type="checkbox" id="autoMode" style="accent-color:#2f6fed"> 自动入库
     </label>
-    <button onclick="document.getElementById('fileInput').click()">📤 上传笔记</button>
+    <button onclick="document.getElementById('fileInput').click()">⬆ 上传笔记</button>
     <input type="file" id="fileInput" accept=".md,.docx,.pdf" multiple style="display:none" onchange="upload()">
-    <button onclick="importFolder()" title="导入服务器本地文件夹，自动识别知识文件">📁 导入文件夹</button>
-    <button onclick="ingest()">🔄 重新导入</button>
-    <button id="pendingBtn" onclick="togglePending()" style="display:none">📋 待审查 <span id="pendingCount">0</span></button>
+    <button onclick="importFolder()" title="导入服务器本地文件夹">📁 导入</button>
+    <button onclick="ingest()" title="重新扫描并导入">🔄 重导</button>
+    <button id="pendingBtn" onclick="togglePending()" style="display:none">📋 待审查<span id="pendingCount" class="dot-badge">0</span></button>
     <div style="position:relative">
-      <button onclick="toggleSessions()" title="会话管理">💬 会话 <span id="curSessName" style="font-weight:400;color:#9aa0b4"></span></button>
-      <div id="sessionPanel" style="display:none;position:absolute;right:0;top:34px;background:#2a2a3c;border:1px solid #3a3a52;border-radius:10px;min-width:260px;max-height:320px;overflow-y:auto;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.4)">
-        <div style="padding:8px 10px;border-bottom:1px solid #3a3a52">
-          <button onclick="newSession()" style="width:100%;background:#4c6ef5;color:#fff;border:none;padding:6px;border-radius:8px;cursor:pointer">＋ 新建会话</button>
+      <button onclick="toggleSessions()">💬 会话<span id="curSessName" style="font-weight:400;color:#8b98ad"></span></button>
+      <div id="sessionPanel" style="display:none;position:absolute;right:0;top:38px;background:#141d31;border:1px solid rgba(255,255,255,0.12);border-radius:13px;min-width:270px;max-height:340px;overflow-y:auto;z-index:30;box-shadow:0 14px 40px rgba(0,0,0,0.5)">
+        <div style="padding:9px 11px;border-bottom:1px solid rgba(255,255,255,0.08)">
+          <button onclick="newSession()" style="width:100%;background:#2f6fed;color:#fff;border:none;padding:7px;border-radius:9px;cursor:pointer;font-size:13px">＋ 新建会话</button>
         </div>
-        <div id="sessionList" style="padding:4px"></div>
+        <div id="sessionList" style="padding:5px"></div>
       </div>
     </div>
   </div>
 </div>
 
-<div id="pendingPanel" style="display:none;background:#2a2a3c;border-bottom:1px solid #3a3a52;padding:12px 24px">
-  <div style="max-width:760px;margin:0 auto">
-    <h3 style="font-size:15px;color:#fff;margin-bottom:10px">📋 待审查文件（确认后才会入库）</h3>
+<div id="pendingPanel" class="panel">
+  <div class="panel-inner">
+    <h3>📋 待审查文件（确认后才会入库）</h3>
     <div id="pendingList"></div>
   </div>
 </div>
 
-<div id="progWrap" style="display:none;padding:10px 24px 0">
-  <div style="max-width:760px;margin:0 auto">
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:#9aa0b4;margin-bottom:4px">
-      <span id="progStage">准备中…</span>
-      <span id="progPct">0%</span>
-    </div>
-    <div style="background:#2a2a3c;border-radius:8px;height:10px;overflow:hidden">
-      <div id="progBar" style="width:0%;height:100%;background:linear-gradient(90deg,#4c6ef5,#69db7c);transition:width .3s"></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;color:#7a8096;margin-top:6px;align-items:center">
-      <span id="progCurrent" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%"></span>
-      <span id="progTime" style="flex-shrink:0">用时 0:00 · 剩余 --</span>
+<div id="progWrap" class="panel" style="padding:10px 22px 12px">
+  <div class="prog-card">
+    <div class="prog-top"><span id="progStage">准备中…</span><span id="progPct">0%</span></div>
+    <div class="prog-bar"><div id="progBar" class="prog-fill"></div></div>
+    <div class="prog-bottom">
+      <span id="progCurrent" class="prog-current"></span>
+      <span id="progTime">用时 0:00 · 剩余 --</span>
     </div>
   </div>
 </div>
@@ -124,15 +274,21 @@
 <div class="chat-wrap">
   <div class="chat" id="chat">
     <div class="welcome">
-      <h2>📚 个人知识库</h2>
-      <p>问我关于你笔记的任何问题</p>
+      <div class="wl-logo">📚</div>
+      <h2>个人知识库</h2>
+      <p>问任何关于你笔记的问题，回答会流式生成</p>
+      <div class="sugg">
+        <button class="sugg-btn" onclick="sendSugg('知识库里有什么内容？')">📖 库里有什么</button>
+        <button class="sugg-btn" onclick="sendSugg('list 和 tuple 有什么区别？')">🐍 Python 基础</button>
+        <button class="sugg-btn" onclick="sendSugg('LangGraph 多智能体怎么做？')">🤖 AI-Agent</button>
+      </div>
     </div>
   </div>
 </div>
 
 <div class="input-bar">
   <div class="input-box">
-    <input id="question" placeholder="问点什么，比如：list 和 tuple 有什么区别？" autocomplete="off">
+    <textarea id="question" rows="1" placeholder="问点什么，比如：list 和 tuple 有什么区别？" autocomplete="off"></textarea>
     <button id="sendBtn" onclick="send()">发送</button>
   </div>
 </div>
@@ -140,44 +296,181 @@
 <script>
 const chatEl = document.getElementById("chat");
 const sendBtn = document.getElementById("sendBtn");
+const inputEl = document.getElementById("question");
+
+/* ===== 消息渲染 ===== */
+function makeRow(cls, avatar) {
+  const row = document.createElement("div");
+  row.className = "row " + cls;
+  const av = document.createElement("div");
+  av.className = "avatar " + (cls === "user" ? "user-av" : "bot-av");
+  av.textContent = avatar;
+  const bubble = document.createElement("div");
+  bubble.className = "bubble " + (cls === "user" ? "user" : "bot");
+  row.appendChild(av);
+  row.appendChild(bubble);
+  return { row, bubble };
+}
 
 function addMsg(text, cls) {
   const welcome = document.querySelector(".welcome");
   if (welcome) welcome.remove();
-  const div = document.createElement("div");
-  div.className = "msg " + cls;
+  const { row, bubble } = makeRow(cls, cls === "user" ? "🧑" : "🤖");
+  bubble.innerHTML = renderMarkdown(text);
+  chatEl.appendChild(row);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return bubble;
+}
 
-  // 检测【选择】块 → 拆成"说明文字 + 选项按钮"
-  const m = text.match(/【选择】\n?([\s\S]*)$/);
-  if (m) {
-    div.textContent = text.replace(/【选择】\n?[\s\S]*$/, "").trim();
-    chatEl.appendChild(div);
-    // 渲染选项按钮
-    const box = document.createElement("div");
-    box.className = "choice-box";
-    m[1].split("\n").forEach(line => {
-      const t = line.replace(/^\s*\d+[.、]\s*/, "").trim();   // 去掉"1. "编号
-      if (!t) return;
-      const btn = document.createElement("button");
-      btn.className = "choice-btn";
-      btn.textContent = t;
-      btn.onclick = () => sendChoice(t);                        // 点击 → 发送
-      box.appendChild(btn);
-    });
-    chatEl.appendChild(box);
-  } else {
-    div.textContent = text;
-    chatEl.appendChild(div);
-  }
+/* ===== 安全转义 + 轻量 Markdown ===== */
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function renderMarkdown(text) {
+  const blocks = [];
+  text = String(text).replace(/```(\w*)\n?([\s\S]*?)```/g, (m, lang, code) => {
+    blocks.push('<pre class="code"><code>' + esc(code.trim()) + '</code></pre>');
+    return "\u0000" + (blocks.length - 1) + "\u0000";
+  });
+  let html = esc(text);
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/`([^`]+)`/g, '<code class="inline">$1</code>');
+  html = html.replace(/^### (.+)$/gm, '<div class="md-h3">$1</div>');
+  html = html.replace(/^## (.+)$/gm, '<div class="md-h2">$1</div>');
+  html = html.replace(/^# (.+)$/gm, '<div class="md-h1">$1</div>');
+  html = html.replace(/^- (.+)$/gm, '<div class="md-li">• $1</div>');
+  // 表格：| 分隔的连续行 → <table>
+  html = html.replace(/(^\|.*\|$)(?:\r?\n\|[:\-\s|]+\|)?(?:\r?\n\|.*\|$)+/gm, function (m) {
+    const lines = m.split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (lines.length < 2) return m;
+    const cells = function (line) {
+      return line.split("|").slice(1, -1).map(function (c) { return c.trim(); });
+    };
+    const head = cells(lines[0]);
+    let out = '<table class="md-table"><thead><tr>' +
+      head.map(function (c) { return "<th>" + c + "</th>"; }).join("") + "</tr></thead><tbody>";
+    for (let i = 2; i < lines.length; i++) {
+      out += "<tr>" + cells(lines[i]).map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>";
+    }
+    return out + "</tbody></table>";
+  });
+  html = html.replace(/\n/g, "<br>");
+  html = html.replace(/\u0000(\d+)\u0000/g, (m, i) => blocks[+i]);
+  return html;
+}
+
+/* ===== 流式机器人气泡 ===== */
+function createBotBubble() {
+  const welcome = document.querySelector(".welcome");
+  if (welcome) welcome.remove();
+  const { row, bubble } = makeRow("bot", "🤖");
+  const chips = document.createElement("div");
+  chips.className = "status-chips";
+  const text = document.createElement("div");
+  text.className = "bubble-text";
+  const cursor = document.createElement("span");
+  cursor.className = "cursor";
+  bubble.appendChild(chips);
+  bubble.appendChild(text);
+  bubble.appendChild(cursor);
+  chatEl.appendChild(row);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return { row, text, cursor, chips, deltaCount: 0 };
+}
+function addStatusChip(b, label) {
+  const c = document.createElement("span");
+  c.className = "status-chip";
+  c.textContent = label;
+  b.chips.appendChild(c);
   chatEl.scrollTop = chatEl.scrollHeight;
 }
-
-function sendChoice(text) {
-  const input = document.getElementById("question");
-  input.value = text;
-  send();
+function clearStatusChips(b) { b.chips.innerHTML = ""; }
+function hideCursor(b) { b.cursor.style.display = "none"; }
+function statusIcon(stage) {
+  if (stage.indexOf("规划") >= 0) return "🧭";
+  if (stage.indexOf("检索") >= 0) return "🔍";
+  if (stage.indexOf("工具") >= 0) return "🛠";
+  if (stage.indexOf("生成") >= 0) return "✍️";
+  if (stage.indexOf("审查") >= 0) return "🛡";
+  if (stage.indexOf("目录") >= 0) return "📖";
+  if (stage.indexOf("重写") >= 0) return "✏️";
+  return "⚙️";
+}
+function handleStreamEvent(ev, b) {
+  if (ev.type === "status") {
+    const s = ev.stage || "";
+    if (s.indexOf("重写") >= 0) {
+      b.deltaCount = 0;
+      b.text.textContent = "";
+      clearStatusChips(b);
+      addStatusChip(b, "✏️ " + s);
+    } else {
+      addStatusChip(b, statusIcon(s) + " " + s);
+    }
+  } else if (ev.type === "delta") {
+    if (b.deltaCount === 0) clearStatusChips(b);
+    b.deltaCount++;
+    b.text.textContent += ev.content || "";
+    chatEl.scrollTop = chatEl.scrollHeight;
+  } else if (ev.type === "done") {
+    hideCursor(b);
+    clearStatusChips(b);
+    b.text.innerHTML = renderMarkdown(b.text.textContent);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    if (ev.sources && ev.sources.length) renderSources(ev.sources);
+  } else if (ev.type === "error") {
+    hideCursor(b);
+    b.text.textContent += "\n\n⚠️ " + (ev.content || "未知错误");
+  }
 }
 
+/* ===== 流式发送 ===== */
+async function send() {
+  const q = inputEl.value.trim();
+  if (!q) return;
+  inputEl.value = "";
+  inputEl.style.height = "auto";
+  sendBtn.disabled = true;
+  addMsg(q, "user");
+  const b = createBotBubble();
+  try {
+    const res = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q, session_id: getSessionId() }),
+    });
+    if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        if (!chunk.startsWith("data: ")) continue;
+        let ev;
+        try { ev = JSON.parse(chunk.slice(6)); } catch (e) { continue; }
+        handleStreamEvent(ev, b);
+      }
+    }
+  } catch (err) {
+    hideCursor(b);
+    clearStatusChips(b);
+    b.text.innerHTML = '<span style="color:#ff8b8b">⚠️ 请求失败，请确认服务已启动</span>';
+  }
+  sendBtn.disabled = false;
+}
+function sendSugg(t) { inputEl.value = t; send(); }
+
+/* ===== 选择题交互（兼容旧格式【选择】块） ===== */
+function sendChoice(text) { inputEl.value = text; send(); }
+
+/* ===== 上传 ===== */
 async function upload() {
   const input = document.getElementById("fileInput");
   if (!input.files.length) return;
@@ -185,32 +478,21 @@ async function upload() {
   const auto = document.getElementById("autoMode").checked;
   const names = files.map(f => f.name).join("、");
   addMsg((auto ? "🤖" : "📤") + " 正在上传" + (auto ? "（自动入库）" : "（待审查）") + "：" + names, "user");
-
-  // 一次请求批量传所有文件（后端 files: list[UploadFile]）
   const fd = new FormData();
   files.forEach(f => fd.append("files", f));
   fd.append("auto", auto ? "1" : "0");
-
   let doneNames = [], pendingNames = [], dupMsg = [], errMsg = "";
   try {
     const res = await fetch("/api/upload", { method: "POST", body: fd });
     const data = await res.json();
     (data.results || []).forEach(r => {
-      if (r.status === "done") {
-        doneNames.push(r.filename + " → [" + (r.topic || "默认") + "]");
-      } else if (r.status === "pending") {
-        pendingNames.push(r.filename + (r.suggest_topic ? " → 建议[" + r.suggest_topic + "]" : " → 主题待定"));
-      } else if (r.status === "duplicate") {
-        dupMsg.push(r.filename + "（" + (r.error || "重复") + "）");
-      } else {
-        errMsg.push(r.filename + "：" + (r.error || "失败"));
-      }
+      if (r.status === "done") doneNames.push(r.filename + " → [" + (r.topic || "默认") + "]");
+      else if (r.status === "pending") pendingNames.push(r.filename + (r.suggest_topic ? " → 建议[" + r.suggest_topic + "]" : " → 主题待定"));
+      else if (r.status === "duplicate") dupMsg.push(r.filename + "（" + (r.error || "重复") + "）");
+      else errMsg.push(r.filename + "：" + (r.error || "失败"));
     });
     if (data.ingest_started) pollIngest();
-  } catch (e) {
-    errMsg.push("请求失败：" + e);
-  }
-
+  } catch (e) { errMsg.push("请求失败：" + e); }
   if (doneNames.length) addMsg("🤖 自动入库中：" + doneNames.join("、"), "bot");
   if (pendingNames.length) addMsg("📋 已进入待审查：" + pendingNames.join("、") + "。点击右上角「待审查」确认入库。", "bot");
   if (dupMsg.length) addMsg("🔁 已跳过重复：" + dupMsg.join("、"), "bot");
@@ -219,23 +501,21 @@ async function upload() {
   refreshPending();
 }
 
-// ---- 文件夹导入（服务器本地路径）----
+/* ===== 文件夹导入 ===== */
 async function importFolder() {
   const path = prompt("输入要导入的本地文件夹路径（自动识别 .md/.docx/.pdf）：");
   if (!path || !path.trim()) return;
   const auto = document.getElementById("autoMode").checked;
-  addMsg((auto ? "📁" : "📁") + " 正在导入文件夹（" + (auto ? "自动入库" : "待审查") + "）：" + path.trim(), "user");
+  addMsg("📁 正在导入文件夹（" + (auto ? "自动入库" : "待审查") + "）：" + path.trim(), "user");
   let doneNames = [], pendingNames = [], dupMsg = [], errMsg = [];
   try {
     const res = await fetch("/api/import/folder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: path.trim(), auto: auto })
     });
     const data = await res.json();
-    if (!res.ok) {
-      errMsg.push(data.detail || "导入失败");
-    } else {
+    if (!res.ok) { errMsg.push(data.detail || "导入失败"); }
+    else {
       const s = data.summary || {};
       (s.details || []).forEach(d => {
         if (d.status === "done") doneNames.push(d.file + " → [" + (d.topic || "默认") + "]");
@@ -243,13 +523,10 @@ async function importFolder() {
         else if (d.status === "duplicate") dupMsg.push(d.file + "（" + (d.note || "重复") + "）");
         else if (d.status === "error") errMsg.push(d.file + "：" + (d.note || "失败"));
       });
-      const skipped = s.skipped ? ["⚠️ 超过单批上限跳过 " + s.skipped + " 个"] : [];
-      if (skipped.length) addMsg(skipped.join("；"), "bot");
+      if (s.skipped) addMsg("⚠️ 超过单批上限跳过 " + s.skipped + " 个", "bot");
       if (data.ingest_started) pollIngest();
     }
-  } catch (e) {
-    errMsg.push("请求失败：" + e);
-  }
+  } catch (e) { errMsg.push("请求失败：" + e); }
   if (doneNames.length) addMsg("🤖 自动入库中：" + doneNames.join("、"), "bot");
   if (pendingNames.length) addMsg("📋 已进入待审查：" + pendingNames.join("、") + "。点击右上角「待审查」确认入库。", "bot");
   if (dupMsg.length) addMsg("🔁 已跳过重复：" + dupMsg.join("、"), "bot");
@@ -257,13 +534,12 @@ async function importFolder() {
   refreshPending();
 }
 
-// ---- 待审查面板 ----
+/* ===== 待审查 ===== */
 function togglePending() {
   const p = document.getElementById("pendingPanel");
   p.style.display = p.style.display === "none" ? "block" : "none";
   if (p.style.display !== "none") refreshPending();
 }
-
 async function refreshPending() {
   try {
     const res = await fetch("/api/pending");
@@ -272,30 +548,24 @@ async function refreshPending() {
     const btn = document.getElementById("pendingBtn");
     const countEl = document.getElementById("pendingCount");
     const box = document.getElementById("pendingList");
-    if (list.length) {
-      btn.style.display = "";
-      countEl.textContent = list.length;
-    } else {
-      btn.style.display = "none";
-    }
-    box.innerHTML = list.length ? "" : "<div style='color:#7a8096;font-size:13px'>没有待审查文件</div>";
+    if (list.length) { btn.style.display = ""; countEl.textContent = list.length; }
+    else { btn.style.display = "none"; }
+    box.innerHTML = list.length ? "" : "<div style='color:#6b7a90;font-size:13px'>没有待审查文件</div>";
     list.forEach(item => {
       const row = document.createElement("div");
-      row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed #3a3a52";
+      row.className = "pending-row";
       const tagLine = (item.tags && item.tags.length)
-        ? "<div style='flex-basis:100%;font-size:11px;color:#7a8096;padding-left:26px'>🏷 " + item.tags.map(t => "<span style='background:#2a2a40;border-radius:4px;padding:1px 6px;margin-right:4px'>" + t + "</span>").join("") + "</div>"
-        : "";
+        ? "<div style='flex-basis:100%;font-size:11px;color:#7d8ba1;padding-left:4px'>🏷 " + item.tags.map(t => "<span class='tag-chip'>" + esc(t) + "</span>").join("") + "</div>" : "";
       row.innerHTML =
-        "<span style='flex:0 0 auto;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px'>📄 " + item.filename + "</span>" +
-        "<input id='topic_" + item.filename + "' value='" + (item.suggest_topic || "") + "' placeholder='主题（可改）' style='flex:1;background:#1e1e2e;border:1px solid #3a3a52;border-radius:6px;padding:4px 8px;color:#e8e8f0;font-size:13px'>" +
-        "<button onclick='reviewApprove(this)' data-file='" + item.filename + "' style='background:#4c6ef5;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px'>✓ 确认入库</button>" +
-        "<button onclick='reviewReject(this)' data-file='" + item.filename + "' style='background:#3a3a52;color:#ff8787;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px'>✕ 丢弃</button>" +
+        "<span class='fname'>📄 " + esc(item.filename) + "</span>" +
+        "<input id='topic_" + esc(item.filename) + "' value='" + esc(item.suggest_topic || "") + "' placeholder='主题（可改）'>" +
+        "<button onclick='reviewApprove(this)' data-file='" + esc(item.filename) + "' style='background:#2f6fed;color:#fff;border:none;padding:5px 11px;border-radius:7px;cursor:pointer;font-size:12px'>✓ 确认入库</button>" +
+        "<button onclick='reviewReject(this)' data-file='" + esc(item.filename) + "' style='background:rgba(255,255,255,0.07);color:#ff8b8b;border:1px solid rgba(255,255,255,0.1);padding:5px 11px;border-radius:7px;cursor:pointer;font-size:12px'>✕ 丢弃</button>" +
         tagLine;
       box.appendChild(row);
     });
-  } catch (e) { /* 服务没起时忽略 */ }
+  } catch (e) {}
 }
-
 async function reviewApprove(btn) {
   const file = btn.getAttribute("data-file");
   const topicInput = document.getElementById("topic_" + file);
@@ -308,14 +578,11 @@ async function reviewApprove(btn) {
       body: JSON.stringify({ filename: file, topic: topic }),
     });
     const data = await res.json();
-    if (res.ok) {
-      addMsg("入库中：" + file + " → [" + topic + "]", "bot");
-      pollIngest();
-    } else { alert("失败：" + (data.detail || "未知")); }
+    if (res.ok) { addMsg("入库中：" + file + " → [" + topic + "]", "bot"); pollIngest(); }
+    else { alert("失败：" + (data.detail || "未知")); }
   } catch (e) { alert("请求失败：" + e); }
   refreshPending();
 }
-
 async function reviewReject(btn) {
   const file = btn.getAttribute("data-file");
   if (!confirm("丢弃 " + file + "？")) return;
@@ -324,53 +591,41 @@ async function reviewReject(btn) {
       method: "DELETE", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filename: file }),
     });
-  } catch (e) { }
+  } catch (e) {}
   refreshPending(); stats();
 }
 
-// ---- 参考来源：按文件聚合 + 可折叠 ----
+/* ===== 参考来源 ===== */
 function renderSources(sources) {
-  // 去掉欢迎块（来源一定出现在问答后）
   const welcome = document.querySelector(".welcome");
   if (welcome) welcome.remove();
-
-  const wrap = document.createElement("div");
-  wrap.className = "source";
-  wrap.style.cssText = "align-self:flex-start;max-width:85%;margin-top:2px";
-
-  // 按 source 文件名聚合
+  const card = document.createElement("div");
+  card.className = "src-card";
   const groups = {};
-  sources.forEach(s => {
-    (groups[s.source] = groups[s.source] || []).push(s);
-  });
+  sources.forEach(s => { (groups[s.source] = groups[s.source] || []).push(s); });
   const files = Object.keys(groups);
-
-  // 折叠头：默认一行
   const head = document.createElement("div");
-  head.style.cssText = "cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px";
-  head.innerHTML = "<span>📎 参考来源（" + files.length + " 篇）</span><span id='srcArrow' style='color:#7a8096'>▶</span>";
+  head.className = "src-head";
+  head.innerHTML = "📎 参考来源（" + files.length + " 篇）<span class='src-arrow' style='color:#6b7a90'>▶</span>";
   head.onclick = () => {
-    const body = wrap.querySelector(".src-body");
-    const arrow = head.querySelector("#srcArrow");
+    const body = card.querySelector(".src-body");
+    const arrow = head.querySelector(".src-arrow");
     const open = body.style.display !== "none";
     body.style.display = open ? "none" : "block";
     arrow.textContent = open ? "▶" : "▼";
   };
-  wrap.appendChild(head);
-
-  // 明细体：每篇文件一行（含片段数），展开显示该文件各片段
+  card.appendChild(head);
   const body = document.createElement("div");
   body.className = "src-body";
-  body.style.cssText = "display:none;margin-top:6px;border-left:2px solid #3a3a52;padding-left:10px";
+  body.style.display = "none";
   files.forEach(fname => {
     const items = groups[fname];
-    // 每篇一个可再展开的组
     const fileDiv = document.createElement("div");
-    fileDiv.style.cssText = "margin:4px 0";
+    fileDiv.className = "src-file";
     const best = Math.max(...items.map(s => s.score)).toFixed(3);
     const fileHead = document.createElement("div");
-    fileHead.style.cssText = "cursor:pointer;color:#9aa0b4";
-    fileHead.innerHTML = "📄 " + fname + " <span style='color:#69db7c'>" + items.length + " 段 · 最高 " + best + "</span> <span style='color:#7a8096'>▶</span>";
+    fileHead.className = "src-file-head";
+    fileHead.innerHTML = "📄 " + esc(fname) + " <span class='src-best'>" + items.length + " 段 · 最高 " + best + "</span> <span style='color:#6b7a90'>▶</span>";
     fileHead.onclick = () => {
       const list = fileDiv.querySelector(".src-list");
       const arrow = fileHead.querySelector("span:last-child");
@@ -381,10 +636,9 @@ function renderSources(sources) {
     fileDiv.appendChild(fileHead);
     const list = document.createElement("div");
     list.className = "src-list";
-    list.style.cssText = "display:none;margin:2px 0 2px 14px;color:#7a8096";
+    list.style.display = "none";
     items.forEach(s => {
       const line = document.createElement("div");
-      line.style.cssText = "margin:2px 0;word-break:break-all";
       const h = (s.heading || "").replace(/^#+\s*/, "").slice(0, 30);
       line.textContent = "· " + (h || "(片段)") + " — 相似度 " + s.score.toFixed(3);
       list.appendChild(line);
@@ -392,22 +646,19 @@ function renderSources(sources) {
     fileDiv.appendChild(list);
     body.appendChild(fileDiv);
   });
-  wrap.appendChild(body);
-  chatEl.appendChild(wrap);
+  card.appendChild(body);
+  chatEl.appendChild(card);
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-// ---- 入库进度条 ----
+/* ===== 入库进度 ===== */
 let progTimer = null;
-
 function _fmtTime(sec) {
   sec = Math.max(0, Math.floor(sec || 0));
   const m = Math.floor(sec / 60), s = sec % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
+  return m + ":" + String(s).padStart(2, "0");
 }
-
 function showProg(stage, pct, current, elapsed, eta, done, total) {
-  // 兼容老调用：showProg(stage, pct)
   if (typeof current === "undefined" && typeof stage === "object" && stage) {
     const d = stage;
     return showProg(d.stage, d.percent, d.current, d.elapsed, d.eta, d.done, d.total);
@@ -417,23 +668,18 @@ function showProg(stage, pct, current, elapsed, eta, done, total) {
   document.getElementById("progStage").textContent = stage || "";
   document.getElementById("progPct").textContent = (pct || 0) + "%";
   document.getElementById("progBar").style.width = (pct || 0) + "%";
-  // 当前操作：done/total + current
   let curText = "";
-  if (done && total) curText = `${done}/${total} · `;
+  if (done && total) curText = done + "/" + total + " · ";
   curText += (current || "").trim();
   document.getElementById("progCurrent").textContent = curText || "—";
-  // 用时 + 剩余
   const t = _fmtTime(elapsed);
-  const etaTxt = (pct >= 100 || !eta) ? "完成" : `剩余 ${_fmtTime(eta)}`;
-  document.getElementById("progTime").textContent = `用时 ${t} · ${etaTxt}`;
+  const etaTxt = (pct >= 100 || !eta) ? "完成" : "剩余 " + _fmtTime(eta);
+  document.getElementById("progTime").textContent = "用时 " + t + " · " + etaTxt;
 }
-
 function hideProg() {
   const w = document.getElementById("progWrap");
-  setTimeout(() => { w.style.display = "none"; }, 400);   // 完成后再停留一会
+  setTimeout(() => { w.style.display = "none"; }, 400);
 }
-
-// 轮询后台入库进度，直到结束
 function pollIngest(onDone) {
   showProg("排队中…", 0, "", 0, 0, 0, 0);
   if (progTimer) clearInterval(progTimer);
@@ -444,60 +690,49 @@ function pollIngest(onDone) {
       showProg(d.stage, d.percent, d.current, d.elapsed, d.eta, d.done, d.total);
       if (!d.running) {
         clearInterval(progTimer); progTimer = null;
-        if (d.error) {
-          addMsg("⚠️ 入库出错：" + d.error, "bot");
-        } else if (d.result) {
+        if (d.error) addMsg("⚠️ 入库出错：" + d.error, "bot");
+        else if (d.result) {
           const s = d.result;
-          addMsg("✅ 入库完成：新增" + s.new + " 修改" + s.changed +
-                 " 未变" + s.unchanged + " 删除" + s.removed + "，片段 " + s.chunks +
-                 (s.elapsed ? "，用时 " + s.elapsed + " 秒" : ""), "bot");
+          addMsg("✅ 入库完成：新增" + s.new + " 修改" + s.changed + " 未变" + s.unchanged + " 删除" + s.removed + "，片段 " + s.chunks + (s.elapsed ? "，用时 " + s.elapsed + " 秒" : ""), "bot");
         }
         hideProg();
         if (onDone) onDone();
         stats();
       }
-    } catch (e) { /* 忽略瞬时错误 */ }
+    } catch (e) {}
   }, 600);
 }
-
 async function ingest() {
   showProg("开始导入…", 3);
   try {
     const res = await fetch("/api/ingest", { method: "POST" });
     await res.json();
     pollIngest();
-  } catch (e) {
-    hideProg();
-    addMsg("⚠️ 导入请求失败：" + e, "bot");
-  }
+  } catch (e) { hideProg(); addMsg("⚠️ 导入请求失败：" + e, "bot"); }
 }
-
 async function stats() {
   try {
     const res = await fetch("/api/stats");
     const data = await res.json();
     document.getElementById("stats").textContent = "库内 " + data.chunks + " 片段";
-  } catch (e) { }
+  } catch (e) {}
 }
 
-// ---- 多会话管理：会话列表在后端（持久化），当前会话 id 存 localStorage ----
+/* ===== 会话管理 ===== */
 function getSessionId() {
   let sid = localStorage.getItem("kb_session_id");
-  if (!sid) { sid = "s_demo_default"; }
+  if (!sid) sid = "s_demo_default";
   return sid;
 }
-
 function setCurSession(sid, name) {
   localStorage.setItem("kb_session_id", sid);
   const el = document.getElementById("curSessName");
   if (el) el.textContent = name ? " · " + name.slice(0, 8) : "";
 }
-
 async function newSession() {
   try {
     const res = await fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "新会话" }),
     });
     const data = await res.json();
@@ -507,26 +742,24 @@ async function newSession() {
     loadSessionList();
   } catch (e) { alert("创建会话失败：" + e); }
 }
-
-// 切换会话：清空聊天区（历史从后端按需加载，UI 简单化：只显示当前会话新对话）
 async function switchSession(sid, title) {
   setCurSession(sid, title);
   resetChatArea();
   addMsg("已切换到会话「" + (title || "新会话").slice(0, 15) + "」，开始提问吧。", "bot");
   document.getElementById("sessionPanel").style.display = "none";
 }
-
 function resetChatArea() {
-  const chat = document.getElementById("chat");
-  chat.innerHTML = '<div class="welcome"><h2>📚 个人知识库</h2><p>问我关于你笔记的任何问题</p></div>';
+  document.getElementById("chat").innerHTML =
+    '<div class="welcome"><div class="wl-logo">📚</div><h2>个人知识库</h2><p>问任何关于你笔记的问题，回答会流式生成</p><div class="sugg">' +
+    '<button class="sugg-btn" onclick="sendSugg(\'知识库里有什么内容？\')">📖 库里有什么</button>' +
+    '<button class="sugg-btn" onclick="sendSugg(\'list 和 tuple 有什么区别？\')">🐍 Python 基础</button>' +
+    '<button class="sugg-btn" onclick="sendSugg(\'LangGraph 多智能体怎么做？\')">🤖 AI-Agent</button></div></div>';
 }
-
 function toggleSessions() {
   const p = document.getElementById("sessionPanel");
   p.style.display = p.style.display === "none" ? "block" : "none";
   if (p.style.display !== "none") loadSessionList();
 }
-
 async function loadSessionList() {
   try {
     const res = await fetch("/api/sessions");
@@ -534,85 +767,53 @@ async function loadSessionList() {
     const cur = getSessionId();
     const box = document.getElementById("sessionList");
     const list = data.sessions || [];
-    if (!list.length) { box.innerHTML = "<div style='color:#7a8096;font-size:13px;padding:8px'>还没有会话</div>"; return; }
+    if (!list.length) { box.innerHTML = "<div style='color:#6b7a90;font-size:13px;padding:8px'>还没有会话</div>"; return; }
     box.innerHTML = "";
     list.forEach(s => {
       const row = document.createElement("div");
-      row.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;cursor:pointer";
-      if (s.id === cur) row.style.background = "#3a3a52";
-
-      // 用 DOM API + textContent 拼接，杜绝引号转义/注入问题
+      row.style.cssText = "display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:9px;cursor:pointer";
+      if (s.id === cur) row.style.background = "rgba(47,111,237,0.18)";
       const main = document.createElement("div");
       main.style.cssText = "flex:1;overflow:hidden";
       const t1 = document.createElement("div");
-      t1.style.cssText = "font-size:13px;color:#e8e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+      t1.style.cssText = "font-size:13px;color:#e6ecf5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
       t1.textContent = s.title || "新会话";
       const t2 = document.createElement("div");
-      t2.style.cssText = "font-size:11px;color:#7a8096";
+      t2.style.cssText = "font-size:11px;color:#6b7a90";
       t2.textContent = s.msg_count + " 条";
-      main.appendChild(t1);
-      main.appendChild(t2);
+      main.appendChild(t1); main.appendChild(t2);
       main.addEventListener("click", () => switchSession(s.id, s.title));
-
       const del = document.createElement("button");
-      del.textContent = "✕";
-      del.title = "删除";
-      del.style.cssText = "background:none;border:none;color:#ff8787;cursor:pointer;font-size:13px";
+      del.textContent = "✕"; del.title = "删除";
+      del.style.cssText = "background:none;border:none;color:#ff8b8b;cursor:pointer;font-size:13px";
       del.addEventListener("click", e => { e.stopPropagation(); deleteSession(s.id); });
-
-      row.appendChild(main);
-      row.appendChild(del);
+      row.appendChild(main); row.appendChild(del);
       box.appendChild(row);
     });
-    // 显示当前会话名
     const curS = list.find(x => x.id === cur);
     const el = document.getElementById("curSessName");
     if (el) el.textContent = curS ? " · " + curS.title.slice(0, 8) : "";
-  } catch (e) { /* 忽略 */ }
+  } catch (e) {}
 }
-
 async function deleteSession(sid) {
   if (!confirm("删除这个会话及其历史？")) return;
   try {
     await fetch("/api/sessions/" + encodeURIComponent(sid), { method: "DELETE" });
     if (getSessionId() === sid) {
-      // 删的是当前会话 → 回默认
       setCurSession("s_demo_default", "");
       resetChatArea();
     }
     loadSessionList();
-  } catch (e) { }
+  } catch (e) {}
 }
 
-async function send() {
-  const input = document.getElementById("question");
-  const q = input.value.trim();
-  if (!q) return;
-  input.value = "";
-  sendBtn.disabled = true;
-  addMsg(q, "user");
-  addMsg("思考中…", "bot");
-  try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q, session_id: getSessionId() }),
-    });
-    const data = await res.json();
-    chatEl.lastElementChild.remove();
-    addMsg(data.answer, "bot");
-    if (data.sources && data.sources.length) {
-      renderSources(data.sources);
-    }
-  } catch (err) {
-    chatEl.lastElementChild.remove();
-    addMsg("⚠️ 请求失败，请确认服务已启动", "bot");
-  }
-  sendBtn.disabled = false;
-}
-
-document.getElementById("question").addEventListener("keydown", e => {
-  if (e.key === "Enter") send();
+/* ===== 输入框自适应高度 + Enter 发送 ===== */
+inputEl.addEventListener("input", () => {
+  inputEl.style.height = "auto";
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 130) + "px";
+});
+inputEl.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
 stats();
@@ -621,5 +822,3 @@ loadSessionList();
 </script>
 </body>
 </html>
-
-
