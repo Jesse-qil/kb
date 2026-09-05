@@ -1,0 +1,107 @@
+[
+  {
+    "id": "decorator_01",
+    "question": "装饰器怎么写",
+    "expected_source": "notes_draft/示例-装饰器.md",
+    "topic": "notes_draft",
+    "group": "decorator"
+  },
+  {
+    "id": "decorator_02",
+    "question": "什么是装饰器",
+    "expected_source": "notes_draft/示例-装饰器.md",
+    "topic": "notes_draft",
+    "group": "decorator"
+  },
+  {
+    "id": "decorator_03",
+    "question": "Python 装饰器",
+    "expected_source": "notes_draft/示例-装饰器.md",
+    "topic": "notes_draft",
+    "group": "decorator"
+  },
+  {
+    "id": "decorator_04",
+    "question": "装饰器的作用是什么",
+    "expected_source": "notes_draft/示例-装饰器.md",
+    "topic": "notes_draft",
+    "group": "decorator"
+  },
+  {
+    "id": "decorator_05",
+    "question": "装饰器怎么读",
+    "expected_source": "notes_draft/示例-装饰器.md",
+    "topic": "notes_draft",
+    "group": "decorator"
+  },
+  {
+    "id": "async_01",
+    "question": "async await 是什么",
+    "expected_source": "notes_draft/test_upload.md",
+    "topic": "notes_draft",
+    "group": "async"
+  },
+  {
+    "id": "async_02",
+    "question": "协程和事件循环",
+    "expected_source": "notes_draft/test_upload.md",
+    "topic": "notes_draft",
+    "group": "async"
+  },
+  {
+    "id": "async_03",
+    "question": "为什么用异步",
+    "expected_source": "notes_draft/test_upload.md",
+    "topic": "notes_draft",
+    "group": "async"
+  },
+  {
+    "id": "async_04",
+    "question": "Python 异步编程入门",
+    "expected_source": "notes_draft/test_upload.md",
+    "topic": "notes_draft",
+    "group": "async"
+  },
+  {
+    "id": "async_05",
+    "question": "事件循环有什么用",
+    "expected_source": "notes_draft/test_upload.md",
+    "topic": "notes_draft",
+    "group": "async"
+  },
+  {
+    "id": "agent_01",
+    "question": "什么是 AI Agent",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "agent"
+  },
+  {
+    "id": "agent_02",
+    "question": "ReAct 是什么",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "agent"
+  },
+  {
+    "id": "agent_03",
+    "question": "工具调用怎么做",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "agent"
+  },
+  {
+    "id": "agent_04",
+    "question": "LangGraph 多 Agent",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "agent"
+  },
+  {
+    "id": "agent_05",
+    "question": "AI Agent 原理",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "agent"
+  }
+]
