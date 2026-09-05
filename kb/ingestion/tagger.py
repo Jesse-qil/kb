@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """文档标签器：根据文档内容给出 3-6 个稳定标签。
 
-三条路（结果合并，取并集）：
-- LLM 零样本打标（按 tag schema 候选）
-- embedding 语义打标：标签文本向量化 vs 文档向量算余弦（bge 可用时才启用）
+主通道（v2，标签自治）：
+- 标签向量库检索：文档向量 → tag_store 检索 Top5
+  - 最高相似度 ≥ 0.60 → 直接复用（不调 LLM）
+  - 0.45 ~ 0.60 → LLM 从候选标签里确认/补充（低成本）
+  - < 0.45 → LLM 生成新标签，写入标签库（后续内容即可检索到）
 - 本地启发式规则兜底，保证永远不空
 """
 from __future__ import annotations
@@ -14,8 +16,13 @@ from pathlib import Path
 
 from ..config import tag_schema_file
 from ..llm import LLMClient
+from . import tag_store
 
 _MAX_TAGS = 6
+# 分层阈值（由 scripts/tag_sim_probe.py 实测校准：
+# 101 篇文档与 35 个标签的 Top1 相似度 p50=0.597、max=0.741，0.60 可覆盖 ~47%）
+_REUSE_MIN = 0.60   # 最高相似度 ≥ 此值 → 直接复用标签，不调 LLM
+_GRAY_MIN = 0.45    # 最高相似度 < 此值 → 全新领域，LLM 生成新标签并写回
 _DEFAULT_SCHEMA = {
     "version": 1,
     "allowed_tags": [
@@ -146,15 +153,15 @@ def _extract_json_blob(text: str) -> dict:
         return {}
 
 
-# ---------- embedding 语义打标通道 ----------
-# 标签向量缓存：{tags元组: 向量列表}，标签表不变就只算一次
+# ---------- embedding 语义打标通道（v1，已由 tag_store 标签库检索取代） ----------
+# 保留函数定义仅为兼容历史 import；新流程不再调用。
 _TAG_VEC_CACHE: dict[tuple, list[list[float]]] = {}
 
 
 def embedding_tags(text: str, schema: dict, top_n: int = 5,
                    threshold: float = 0.40) -> list[str]:
-    """语义打标：把候选标签（可带描述）和文档分别向量化，余弦超阈值即入选。
-    bge 不可用（hash 降级）时返回空列表——hash 向量没有语义，打了也是噪声。"""
+    """v1 语义打标：对固定候选表做相似度。已被 tag_store.retrieve 取代——
+    标签库检索覆盖候选表 + 动态新增标签，功能等价且不依赖写死的候选表。"""
     from .. import embedding as E
     if E._use_fallback:
         return []
@@ -177,41 +184,81 @@ def embedding_tags(text: str, schema: dict, top_n: int = 5,
         return []
 
 
-def suggest_tags(text: str, title: str = "", topic: str = "") -> list[str]:
-    """根据文档内容给出标签列表：LLM + embedding 语义 + 启发式三路合并。
-    LLM/embedding 都失效时启发式兜底，保证不空。"""
+def _llm_suggest(text: str, title: str, topic: str,
+                 candidates: list[tuple[str, float]], prefer_existing: bool = True) -> list[str]:
+    """LLM 打标：候选标签来自标签库检索结果。
+    prefer_existing=True（灰色地带）：优先从候选里选，不够才补新标签；
+    prefer_existing=False（全新领域）：允许放开生成，但语义相同必须复用候选。
+    返回空列表表示失败（调用方走启发式兜底）。
+    """
     schema = _load_schema()
-    fallback = _heuristic_tags(text, title=title, topic=topic)
-
-    # 1) LLM 零样本（失败返回空，不抛）
-    llm_tags: list[str] = []
     try:
         llm = LLMClient()
-        if llm.provider != "mock":
-            prompt = (
-                "你是知识库打标器。根据文档内容输出 JSON，只能是 "
-                '{"tags":["标签1","标签2"]}。'
-                f"尽量从候选标签里选 3-5 个；如果候选都不合适，可以补充少量新标签。"
-                f"\n候选标签：{', '.join(schema.get('allowed_tags', []))}"
-                f"\n当前主题：{topic or '默认'}"
-                f"\n文档标题：{title or '（无）'}"
-                f"\n文档开头：\n{text[:1500]}"
-            )
-            out = llm.chat([
-                {"role": "system", "content": "你只输出 JSON。"},
-                {"role": "user", "content": prompt},
-            ])
-            raw_tags = _extract_json_blob(out).get("tags", [])
-            if isinstance(raw_tags, list):
-                llm_tags = _dedupe([str(t) for t in raw_tags])
+        if llm.provider == "mock":
+            return []
+        cand_txt = ", ".join(f"{t}(相似度{s:.2f})" for t, s in candidates) if candidates else "（无）"
+        if prefer_existing:
+            instruction = "优先从候选标签里选 3-5 个；候选不够合适可补充少量新标签，避免近义重复。"
+        else:
+            instruction = ("这是全新领域。按内容生成 3-5 个精准标签；"
+                           "若与候选标签语义相同，必须复用候选标签，不要造近义词。")
+        prompt = (
+            "你是知识库打标器。根据文档内容输出 JSON，只能是 "
+            '{"tags":["标签1","标签2"]}。'
+            f"\n{instruction}"
+            f"\n候选标签（来自标签库检索，越靠前越相似）：{cand_txt}"
+            f"\n当前主题：{topic or '默认'}"
+            f"\n文档标题：{title or '（无）'}"
+            f"\n文档开头：\n{text[:1500]}"
+        )
+        out = llm.chat([
+            {"role": "system", "content": "你只输出 JSON。"},
+            {"role": "user", "content": prompt},
+        ])
+        raw_tags = _extract_json_blob(out).get("tags", [])
+        if isinstance(raw_tags, list):
+            return _dedupe([str(t) for t in raw_tags])
     except Exception:
-        llm_tags = []
+        pass
+    return []
 
-    # 2) embedding 语义通道（与 LLM 结果互补，LLM 漏掉的补上）
-    emb_tags = embedding_tags(text, schema)
 
-    # 3) 合并：LLM 优先，embedding 补充，都弱时启发式兜底
-    merged = _dedupe(llm_tags + emb_tags)
+def suggest_tags(text: str, title: str = "", topic: str = "") -> list[str]:
+    """根据文档内容给出标签列表（v2 标签自治流程）：
+
+    1. 文档向量 → 标签向量库检索 Top5
+    2. 最高相似度 ≥ 0.60 → 直接复用达标标签（免 LLM，复用不足 3 个由启发式补）
+    3. 0.45 ~ 0.60 → LLM 从候选标签确认/补充（低成本）
+    4. < 0.45 → LLM 生成新标签（写回标签库，后续内容可检索到）
+    LLM/标签库都失效时启发式兜底，保证不空。
+    """
+    fallback = _heuristic_tags(text, title=title, topic=topic)
+
+    # 1) 标签库检索（主通道：覆盖种子候选 + 动态新增标签）
+    hits = tag_store.retrieve(text, top_k=5)
+    llm_tags: list[str] = []
+
+    if hits and hits[0][1] >= _REUSE_MIN:
+        # 2) 高分复用：不调 LLM。复用全部达标标签，不足 3 个由启发式补足
+        reuse = [t for t, s in hits if s >= _REUSE_MIN]
+        merged = _dedupe(reuse + fallback)
+        return merged or fallback
+
+    # 3/4) 灰色地带或全新领域：LLM 参与
+    if hits:
+        prefer_existing = hits[0][1] >= _GRAY_MIN
+        llm_tags = _llm_suggest(text, title, topic, hits, prefer_existing=prefer_existing)
+    else:
+        llm_tags = _llm_suggest(text, title, topic, [], prefer_existing=False)
+
+    # 新标签写回标签库（自治：下次任何文档都能检索到）
+    if llm_tags:
+        known = {t for t, _ in hits}
+        new_tags = [t for t in llm_tags if t not in known]
+        if new_tags:
+            tag_store.add_tags(new_tags, source=f"{topic}/{title}" if title else topic)
+
+    merged = _dedupe(llm_tags)
     if len(merged) < 3:
         merged = _dedupe(merged + fallback)
     return merged or fallback
