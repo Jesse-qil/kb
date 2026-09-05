@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import statistics
 import shutil
@@ -25,12 +26,29 @@ def load_cases() -> list[dict]:
     return json.loads(CASES_FILE.read_text(encoding="utf-8"))
 
 
-def ensure_indexed() -> None:
+def ensure_indexed(*, reset_chroma: bool = True) -> None:
     """重置向量库 + 台账 + chunk_cache（meta+emb），重跑入库。
+
+    reset_chroma=False：跳过清空 + 重建，直接复用现有数据（快速模式）
+        适合：检索代码路径回归 / Agent 调优对比。秒级完成。
+    reset_chroma=True（默认）：清空 + 全量 ingest。慢（缓存命中 ~20s；冷启动 ~8min）。
+
     chunk_cache 保留与否取决于你想测什么：
     - 保留：跳过 LLM 打标 + embedding，30 秒完成（关心检索代码路径）
     - 删除：从原始 markdown 重建，~8 分钟（关心打标/embedding 链路）
-    benchmark 默认清理冷启动测全链路。"""
+    """
+    if not reset_chroma:
+        print("[benchmark] quick mode: 复用现有 chroma+chunk_cache，不重建")
+        # 确保至少有基础数据
+        from kb.storage.vector_store import _collection
+        if _collection().count() == 0:
+            print("[benchmark] chroma 为空，自动 fallback 到全量 ingest")
+            _full_reset_and_ingest()
+        return
+    _full_reset_and_ingest()
+
+
+def _full_reset_and_ingest() -> None:
     shutil.rmtree(chroma_dir(), ignore_errors=True)
     if index_file().exists():
         index_file().unlink()
@@ -124,7 +142,15 @@ def write_report(summary: dict, rows: list[dict]) -> None:
 
 
 def main() -> int:
-    ensure_indexed()
+    parser = argparse.ArgumentParser(description="Retrieval benchmark")
+    parser.add_argument(
+        "--no-ingest",
+        action="store_true",
+        help="复用现有 chroma + chunk_cache，不重建（秒级）。用于回归检索代码路径",
+    )
+    args = parser.parse_args()
+
+    ensure_indexed(reset_chroma=not args.no_ingest)
     cases = load_cases()
     filtered_rows = [evaluate_case(case, topic_filter=case.get("topic", "")) for case in cases]
     global_rows = [evaluate_case(case, topic_filter="") for case in cases]

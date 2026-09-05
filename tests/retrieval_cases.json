@@ -2,71 +2,71 @@
   {
     "id": "decorator_01",
     "question": "装饰器怎么写",
-    "expected_source": "notes_draft/示例-装饰器.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/示例-装饰器.md",
+    "topic": "Python基础",
     "group": "decorator"
   },
   {
     "id": "decorator_02",
     "question": "什么是装饰器",
-    "expected_source": "notes_draft/示例-装饰器.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/示例-装饰器.md",
+    "topic": "Python基础",
     "group": "decorator"
   },
   {
     "id": "decorator_03",
     "question": "Python 装饰器",
-    "expected_source": "notes_draft/示例-装饰器.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/示例-装饰器.md",
+    "topic": "Python基础",
     "group": "decorator"
   },
   {
     "id": "decorator_04",
     "question": "装饰器的作用是什么",
-    "expected_source": "notes_draft/示例-装饰器.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/示例-装饰器.md",
+    "topic": "Python基础",
     "group": "decorator"
   },
   {
     "id": "decorator_05",
     "question": "装饰器怎么读",
-    "expected_source": "notes_draft/示例-装饰器.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/示例-装饰器.md",
+    "topic": "Python基础",
     "group": "decorator"
   },
   {
     "id": "async_01",
     "question": "async await 是什么",
-    "expected_source": "notes_draft/test_upload.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/test_upload.md",
+    "topic": "Python基础",
     "group": "async"
   },
   {
     "id": "async_02",
     "question": "协程和事件循环",
-    "expected_source": "notes_draft/test_upload.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/W07-并发与异步.md",
+    "topic": "Python基础",
     "group": "async"
   },
   {
     "id": "async_03",
     "question": "为什么用异步",
-    "expected_source": "notes_draft/test_upload.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/W07-并发与异步.md",
+    "topic": "Python基础",
     "group": "async"
   },
   {
     "id": "async_04",
     "question": "Python 异步编程入门",
-    "expected_source": "notes_draft/test_upload.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/test_upload.md",
+    "topic": "Python基础",
     "group": "async"
   },
   {
     "id": "async_05",
     "question": "事件循环有什么用",
-    "expected_source": "notes_draft/test_upload.md",
-    "topic": "notes_draft",
+    "expected_source": "Python基础/W07-并发与异步.md",
+    "topic": "Python基础",
     "group": "async"
   },
   {
@@ -103,5 +103,69 @@
     "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
     "topic": "AI-Agent",
     "group": "agent"
+  },
+  {
+    "id": "react_01",
+    "question": "ReAct 推理和行动",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "react_confusion",
+    "note": "ReAct 是 Agent 范式，不应命中 React 前端课程（如果命中即失败）"
+  },
+  {
+    "id": "react_02",
+    "question": "ReAct 框架",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "react_confusion",
+    "note": "ReAct 是 Agent 框架，不应命中 React.js"
+  },
+  {
+    "id": "react_03",
+    "question": "ReAct prompt 怎么写",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "react_confusion",
+    "note": "ReAct prompt 是 Agent 思考模板"
+  },
+  {
+    "id": "langchain_01",
+    "question": "LangChain 怎么做 RAG",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "agent_confusion",
+    "note": "LangChain RAG 应命中 AI-Agent，不应命中 reference"
+  },
+  {
+    "id": "langchain_02",
+    "question": "LangChain Agent",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "topic": "AI-Agent",
+    "group": "agent_confusion",
+    "note": "LangChain Agent 框架"
+  },
+  {
+    "id": "vector_01",
+    "question": "向量数据库怎么选",
+    "expected_source": "数据库/W05-向量数据库与全文搜索.md",
+    "topic": "数据库",
+    "group": "vector_db",
+    "note": "向量数据库 应命中 数据库/W05，不应命中 Python基础/embeddings"
+  },
+  {
+    "id": "vector_02",
+    "question": "chroma 和 milvus 区别",
+    "expected_source": "数据库/W05-向量数据库与全文搜索.md",
+    "topic": "数据库",
+    "group": "vector_db",
+    "note": "向量数据库对比"
+  },
+  {
+    "id": "pydantic_01",
+    "question": "Pydantic 模型验证",
+    "expected_source": "Python基础/W08-类型系统与Pydantic.md",
+    "topic": "Python基础",
+    "group": "pydantic",
+    "note": "Pydantic 是 Python 类型系统一部分"
   }
 ]

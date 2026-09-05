@@ -94,6 +94,7 @@ def ingest(verbose: bool = True, progress=None) -> dict:
                     "topic": info["topic"],
                     "heading": chunk.get("heading", ""),
                     "embedding": chunk.get("embedding"),
+                    "tags": list(file_tags)
                 })
             if all(c.get("embedding") is not None for c in file_chunks):
                 cache_hits += 1

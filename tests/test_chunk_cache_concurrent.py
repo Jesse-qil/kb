@@ -92,35 +92,41 @@ class TestConcurrent:
         for r in results:
             assert r[0] == "ok", f"子进程失败: {r}"
 
-        # 2) 数据一致性：从主进程独立加载一次
+        # 2) 数据一致性：从主进程独立加载一次（用 try/finally 保证回滚 KNOWLEDGE_DIR）
         sys.path.insert(0, str(ROOT))
         from kb import config
-        config.KNOWLEDGE_DIR = kb_dir
         from kb.ingestion import chunk_cache
-        importlib.reload(chunk_cache)
+        original_kb_dir = config.KNOWLEDGE_DIR
+        try:
+            config.KNOWLEDGE_DIR = kb_dir
+            importlib.reload(chunk_cache)
 
-        rows = chunk_cache._load_rows()
-        # 同 key 多次 put_many，最后写赢；总条数 = 1（同一 key）
-        assert len(rows) == 1
-        winner = next(iter(rows.values()))
-        assert winner["content_hash"] == "concurrent_same_key"
-        # winner 应有 1 个 chunk
-        assert len(winner["chunks"]) == 1
-        # winner 的 text 必须来自某个 pid（4 个可能之一）
-        assert "text-from-pid-" in winner["chunks"][0]["text"]
+            rows = chunk_cache._load_rows()
+            # 同 key 多次 put_many，最后写赢；总条数 = 1（同一 key）
+            assert len(rows) == 1
+            winner = next(iter(rows.values()))
+            assert winner["content_hash"] == "concurrent_same_key"
+            # winner 应有 1 个 chunk
+            assert len(winner["chunks"]) == 1
+            # winner 的 text 必须来自某个 pid（4 个可能之一）
+            assert "text-from-pid-" in winner["chunks"][0]["text"]
 
-        # 3) emb.npy 维度必须正确（不会因为竞态被破坏）
-        emb = np.load(kb_dir / "chunks" / "chunk_cache.emb.npy")
-        assert emb.ndim == 1
-        assert emb.dtype == np.float32
-        assert emb.shape[0] >= 512  # 至少能放 winner 的一条 chunk
-        # winner 的 chunk 必须在 emb.npy 里能取到 512 维
-        off = winner["chunks"][0]["emb_off"]
-        ln = winner["chunks"][0]["emb_len"]
-        assert ln == 512
-        assert off + ln <= emb.shape[0]
-        vec = emb[off:off + ln]
-        assert vec.shape == (512,)
+            # 3) emb.npy 维度必须正确（不会因为竞态被破坏）
+            emb = np.load(kb_dir / "chunks" / "chunk_cache.emb.npy")
+            assert emb.ndim == 1
+            assert emb.dtype == np.float32
+            assert emb.shape[0] >= 512  # 至少能放 winner 的一条 chunk
+            # winner 的 chunk 必须在 emb.npy 里能取到 512 维
+            off = winner["chunks"][0]["emb_off"]
+            ln = winner["chunks"][0]["emb_len"]
+            assert ln == 512
+            assert off + ln <= emb.shape[0]
+            vec = emb[off:off + ln]
+            assert vec.shape == (512,)
+        finally:
+            # 关键：恢复原 KNOWLEDGE_DIR，否则后续 test 会读到空 kb
+            config.KNOWLEDGE_DIR = original_kb_dir
+            importlib.reload(chunk_cache)
 
     @pytest.mark.timeout(120)
     def test_concurrent_different_keys_independent(self, tmp_path):
@@ -149,17 +155,22 @@ class TestConcurrent:
         for r in results:
             assert r[0] == "ok", f"子进程失败: {r}"
 
-        # 验证 4 条独立数据都落盘
+        # 验证 4 条独立数据都落盘（用 try/finally 保证回滚 KNOWLEDGE_DIR）
         sys.path.insert(0, str(ROOT))
         from kb import config
-        config.KNOWLEDGE_DIR = kb_dir
         from kb.ingestion import chunk_cache
-        importlib.reload(chunk_cache)
-        rows = chunk_cache._load_rows()
-        assert len(rows) == n_workers
-        for seed in range(n_workers):
-            key = f"unique_{seed}|400|120|BAAI/bge-small-zh-v1.5"
-            assert key in rows, f"缺失 pid={seed} 的数据"
+        original_kb_dir = config.KNOWLEDGE_DIR
+        try:
+            config.KNOWLEDGE_DIR = kb_dir
+            importlib.reload(chunk_cache)
+            rows = chunk_cache._load_rows()
+            assert len(rows) == n_workers
+            for seed in range(n_workers):
+                key = f"unique_{seed}|400|120|BAAI/bge-small-zh-v1.5"
+                assert key in rows, f"缺失 pid={seed} 的数据"
+        finally:
+            config.KNOWLEDGE_DIR = original_kb_dir
+            importlib.reload(chunk_cache)
 
 
 def _worker_different_keys(pid_seed: int, kb_dir: str, result_queue):
