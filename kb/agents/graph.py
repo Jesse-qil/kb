@@ -12,10 +12,11 @@ from ..llm import LLMClient
 from ..web_search import web_search
 from ..config import recall_cfg
 from ..prompts import (PLANNER_SYSTEM, ANSWERER_PROMPT,
-                    ANSWERER_NO_DATA_PROMPT, REVIEWER_SYSTEM)
+                    ANSWERER_NO_DATA_PROMPT, REVIEWER_SYSTEM,
+                    USER_PROFILE_BLOCK)
 
 
-# ---------- 1. 状态（Agent 之间的"快递单"） ----------
+# ---------- 1. 状态（Agent 之间的"快递单") ----------
 class KBState(TypedDict):
     question: str            # 用户的问题
     topic: str               # Planner 判断出的领域（如 "notes_draft"）
@@ -36,6 +37,15 @@ def _chat(system: str, user: str) -> str:
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ])
+
+
+def _append_profile(system: str) -> str:
+    """把长期记忆回灌拼到 system 末尾（无 profile 时原样返回）。"""
+    from .. import memory
+    profile_text = memory.to_text()
+    if not profile_text:
+        return system
+    return system + USER_PROFILE_BLOCK.format(profile_text=profile_text)
 
 
 # ---------- 候选领域：从台账/向量库拿（无 chroma 时可从 doc_index） ----------
@@ -219,7 +229,7 @@ def answerer(state: KBState) -> dict:
     # 只要有"料"（检索 hits 或工具结果 tool_result）就不算无资料
     has_material = state.get("hits") or state.get("tool_result")
     if not has_material:
-        system = ANSWERER_NO_DATA_PROMPT
+        system = _append_profile(ANSWERER_NO_DATA_PROMPT)
         user = (f"问题：{state['question']}\n\n"
                 "（知识库和网络都没找到相关资料，请如实说明，可以凭常识简单回答，但要明确说这不是笔记内容）")
 
@@ -231,7 +241,7 @@ def answerer(state: KBState) -> dict:
     context = "\n\n".join(f"[来自 {h['source']}]\n{h['text']}" for h in state["hits"])
     if state.get("tool_result"):  # ← 加这里：拼 context 之后
         context += f"\n\n[工具结果]\n{state['tool_result']}"
-    system = ANSWERER_PROMPT
+    system = _append_profile(ANSWERER_PROMPT)
     user = f"问题：{state['question']}\n\n参考资料：\n{context}"
     if state.get("history"):
         user = f"之前对话：\n{state['history']}\n\n" + user

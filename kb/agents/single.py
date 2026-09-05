@@ -4,6 +4,16 @@ from ..storage.vector_store import query
 from ..llm import LLMClient
 from ..config import recall_cfg
 from ..prompts import KB_ASSISTANT_PROMPT as SYSTEM_PROMPT
+from ..prompts import USER_PROFILE_BLOCK
+
+
+def _system_with_profile() -> str:
+    """system prompt = 人设 + 长期记忆回灌（无 profile 时只用人设）。"""
+    from .. import memory
+    profile_text = memory.to_text()
+    if not profile_text:
+        return SYSTEM_PROMPT
+    return SYSTEM_PROMPT + USER_PROFILE_BLOCK.format(profile_text=profile_text)
 
 
 def ask(question: str, topic: str = "") -> dict:
@@ -21,7 +31,7 @@ def ask(question: str, topic: str = "") -> dict:
                 "（知识库里没有找到相关资料，请如实说明，可以凭常识简单回答，但要说这不是笔记内容）")
 
     answer = LLMClient().chat([
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": _system_with_profile()},
         {"role": "user", "content": user},
     ])
 

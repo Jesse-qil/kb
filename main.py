@@ -334,6 +334,15 @@ def api_chat(req: ChatRequest):
     # 记入历史（用户问的 + 小齐答的）
     session.append(req.session_id, "user", req.question)
     session.append(req.session_id, "assistant", result.get("answer", ""))
+    # 回答后自动提炼用户画像写回 profile（静默失败不影响主对话）
+    try:
+        from kb import memory
+        from kb.llm import LLMClient
+        memory.update_from_conversation(
+            req.question, result.get("answer", ""), LLMClient()
+        )
+    except Exception:
+        pass
     return result
 
 
