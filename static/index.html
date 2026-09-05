@@ -83,6 +83,7 @@
     </label>
     <button onclick="document.getElementById('fileInput').click()">📤 上传笔记</button>
     <input type="file" id="fileInput" accept=".md,.docx,.pdf" multiple style="display:none" onchange="upload()">
+    <button onclick="importFolder()" title="导入服务器本地文件夹，自动识别知识文件">📁 导入文件夹</button>
     <button onclick="ingest()">🔄 重新导入</button>
     <button id="pendingBtn" onclick="togglePending()" style="display:none">📋 待审查 <span id="pendingCount">0</span></button>
     <div style="position:relative">
@@ -107,10 +108,15 @@
 <div id="progWrap" style="display:none;padding:10px 24px 0">
   <div style="max-width:760px;margin:0 auto">
     <div style="display:flex;justify-content:space-between;font-size:12px;color:#9aa0b4;margin-bottom:4px">
-      <span id="progStage">准备中…</span><span id="progPct">0%</span>
+      <span id="progStage">准备中…</span>
+      <span id="progPct">0%</span>
     </div>
     <div style="background:#2a2a3c;border-radius:8px;height:10px;overflow:hidden">
       <div id="progBar" style="width:0%;height:100%;background:linear-gradient(90deg,#4c6ef5,#69db7c);transition:width .3s"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#7a8096;margin-top:6px;align-items:center">
+      <span id="progCurrent" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%"></span>
+      <span id="progTime" style="flex-shrink:0">用时 0:00 · 剩余 --</span>
     </div>
   </div>
 </div>
@@ -213,6 +219,44 @@ async function upload() {
   refreshPending();
 }
 
+// ---- 文件夹导入（服务器本地路径）----
+async function importFolder() {
+  const path = prompt("输入要导入的本地文件夹路径（自动识别 .md/.docx/.pdf）：");
+  if (!path || !path.trim()) return;
+  const auto = document.getElementById("autoMode").checked;
+  addMsg((auto ? "📁" : "📁") + " 正在导入文件夹（" + (auto ? "自动入库" : "待审查") + "）：" + path.trim(), "user");
+  let doneNames = [], pendingNames = [], dupMsg = [], errMsg = [];
+  try {
+    const res = await fetch("/api/import/folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: path.trim(), auto: auto })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errMsg.push(data.detail || "导入失败");
+    } else {
+      const s = data.summary || {};
+      (s.details || []).forEach(d => {
+        if (d.status === "done") doneNames.push(d.file + " → [" + (d.topic || "默认") + "]");
+        else if (d.status === "pending") pendingNames.push(d.file + (d.suggest_topic ? " → 建议[" + d.suggest_topic + "]" : " → 主题待定"));
+        else if (d.status === "duplicate") dupMsg.push(d.file + "（" + (d.note || "重复") + "）");
+        else if (d.status === "error") errMsg.push(d.file + "：" + (d.note || "失败"));
+      });
+      const skipped = s.skipped ? ["⚠️ 超过单批上限跳过 " + s.skipped + " 个"] : [];
+      if (skipped.length) addMsg(skipped.join("；"), "bot");
+      if (data.ingest_started) pollIngest();
+    }
+  } catch (e) {
+    errMsg.push("请求失败：" + e);
+  }
+  if (doneNames.length) addMsg("🤖 自动入库中：" + doneNames.join("、"), "bot");
+  if (pendingNames.length) addMsg("📋 已进入待审查：" + pendingNames.join("、") + "。点击右上角「待审查」确认入库。", "bot");
+  if (dupMsg.length) addMsg("🔁 已跳过重复：" + dupMsg.join("、"), "bot");
+  if (errMsg.length) addMsg("⚠️ 失败：" + errMsg.join("；"), "bot");
+  refreshPending();
+}
+
 // ---- 待审查面板 ----
 function togglePending() {
   const p = document.getElementById("pendingPanel");
@@ -238,11 +282,15 @@ async function refreshPending() {
     list.forEach(item => {
       const row = document.createElement("div");
       row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed #3a3a52";
+      const tagLine = (item.tags && item.tags.length)
+        ? "<div style='flex-basis:100%;font-size:11px;color:#7a8096;padding-left:26px'>🏷 " + item.tags.map(t => "<span style='background:#2a2a40;border-radius:4px;padding:1px 6px;margin-right:4px'>" + t + "</span>").join("") + "</div>"
+        : "";
       row.innerHTML =
         "<span style='flex:0 0 auto;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px'>📄 " + item.filename + "</span>" +
         "<input id='topic_" + item.filename + "' value='" + (item.suggest_topic || "") + "' placeholder='主题（可改）' style='flex:1;background:#1e1e2e;border:1px solid #3a3a52;border-radius:6px;padding:4px 8px;color:#e8e8f0;font-size:13px'>" +
         "<button onclick='reviewApprove(this)' data-file='" + item.filename + "' style='background:#4c6ef5;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px'>✓ 确认入库</button>" +
-        "<button onclick='reviewReject(this)' data-file='" + item.filename + "' style='background:#3a3a52;color:#ff8787;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px'>✕ 丢弃</button>";
+        "<button onclick='reviewReject(this)' data-file='" + item.filename + "' style='background:#3a3a52;color:#ff8787;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px'>✕ 丢弃</button>" +
+        tagLine;
       box.appendChild(row);
     });
   } catch (e) { /* 服务没起时忽略 */ }
@@ -352,12 +400,32 @@ function renderSources(sources) {
 // ---- 入库进度条 ----
 let progTimer = null;
 
-function showProg(stage, pct) {
+function _fmtTime(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function showProg(stage, pct, current, elapsed, eta, done, total) {
+  // 兼容老调用：showProg(stage, pct)
+  if (typeof current === "undefined" && typeof stage === "object" && stage) {
+    const d = stage;
+    return showProg(d.stage, d.percent, d.current, d.elapsed, d.eta, d.done, d.total);
+  }
   const w = document.getElementById("progWrap");
   w.style.display = "block";
   document.getElementById("progStage").textContent = stage || "";
   document.getElementById("progPct").textContent = (pct || 0) + "%";
   document.getElementById("progBar").style.width = (pct || 0) + "%";
+  // 当前操作：done/total + current
+  let curText = "";
+  if (done && total) curText = `${done}/${total} · `;
+  curText += (current || "").trim();
+  document.getElementById("progCurrent").textContent = curText || "—";
+  // 用时 + 剩余
+  const t = _fmtTime(elapsed);
+  const etaTxt = (pct >= 100 || !eta) ? "完成" : `剩余 ${_fmtTime(eta)}`;
+  document.getElementById("progTime").textContent = `用时 ${t} · ${etaTxt}`;
 }
 
 function hideProg() {
@@ -367,13 +435,13 @@ function hideProg() {
 
 // 轮询后台入库进度，直到结束
 function pollIngest(onDone) {
-  showProg("排队中…", 0);
+  showProg("排队中…", 0, "", 0, 0, 0, 0);
   if (progTimer) clearInterval(progTimer);
   progTimer = setInterval(async () => {
     try {
       const res = await fetch("/api/ingest/progress");
       const d = await res.json();
-      showProg(d.stage || "", d.percent || 0);
+      showProg(d.stage, d.percent, d.current, d.elapsed, d.eta, d.done, d.total);
       if (!d.running) {
         clearInterval(progTimer); progTimer = null;
         if (d.error) {
@@ -381,7 +449,8 @@ function pollIngest(onDone) {
         } else if (d.result) {
           const s = d.result;
           addMsg("✅ 入库完成：新增" + s.new + " 修改" + s.changed +
-                 " 未变" + s.unchanged + " 删除" + s.removed + "，片段 " + s.chunks, "bot");
+                 " 未变" + s.unchanged + " 删除" + s.removed + "，片段 " + s.chunks +
+                 (s.elapsed ? "，用时 " + s.elapsed + " 秒" : ""), "bot");
         }
         hideProg();
         if (onDone) onDone();
@@ -409,7 +478,7 @@ async function stats() {
     const data = await res.json();
     document.getElementById("stats").textContent = "库内 " + data.chunks + " 片段";
   } catch (e) { }
-}3
+}
 
 // ---- 多会话管理：会话列表在后端（持久化），当前会话 id 存 localStorage ----
 function getSessionId() {
@@ -471,12 +540,28 @@ async function loadSessionList() {
       const row = document.createElement("div");
       row.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;cursor:pointer";
       if (s.id === cur) row.style.background = "#3a3a52";
-      row.innerHTML =
-        "<div style='flex:1;overflow:hidden' onclick='switchSession("" + s.id + "","" + (s.title || "").replace(/"/g, "") + "")'>" +
-          "<div style='font-size:13px;color:#e8e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>" + (s.title || "新会话") + "</div>" +
-          "<div style='font-size:11px;color:#7a8096'>" + s.msg_count + " 条</div>" +
-        "</div>" +
-        "<button onclick='event.stopPropagation();deleteSession("" + s.id + "")' style='background:none;border:none;color:#ff8787;cursor:pointer;font-size:13px' title='删除'>✕</button>";
+
+      // 用 DOM API + textContent 拼接，杜绝引号转义/注入问题
+      const main = document.createElement("div");
+      main.style.cssText = "flex:1;overflow:hidden";
+      const t1 = document.createElement("div");
+      t1.style.cssText = "font-size:13px;color:#e8e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+      t1.textContent = s.title || "新会话";
+      const t2 = document.createElement("div");
+      t2.style.cssText = "font-size:11px;color:#7a8096";
+      t2.textContent = s.msg_count + " 条";
+      main.appendChild(t1);
+      main.appendChild(t2);
+      main.addEventListener("click", () => switchSession(s.id, s.title));
+
+      const del = document.createElement("button");
+      del.textContent = "✕";
+      del.title = "删除";
+      del.style.cssText = "background:none;border:none;color:#ff8787;cursor:pointer;font-size:13px";
+      del.addEventListener("click", e => { e.stopPropagation(); deleteSession(s.id); });
+
+      row.appendChild(main);
+      row.appendChild(del);
       box.appendChild(row);
     });
     // 显示当前会话名

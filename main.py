@@ -1,5 +1,7 @@
 """Web 入口：启动服务后浏览器打开 http://127.0.0.1:8000
 迁移自旧项目 app/main.py：API 保持一致（/api/ingest /api/stats /api/chat）。"""
+import threading
+import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -14,25 +16,73 @@ from kb.agents.graph import ask
 app = FastAPI(title="kb-v2 个人知识库")
 
 # ---------- 后台入库任务状态（前端进度条轮询用） ----------
-_INGEST = {"running": False, "stage": "", "percent": 0, "result": None, "error": None}
-import threading
+# 进度回调签名：progress(stage: str, percent: float, *, current="", total=0, done=0)
+# main.py 在 _INGEST 上自动维护 elapsed/eta，前端只读字段。
+_INGEST: dict = {
+    "running": False,
+    "stage": "",
+    "percent": 0,
+    "current": "",       # 当前操作对象（如文件名 / "向量化 64/180"）
+    "done": 0,
+    "total": 0,
+    "elapsed": 0,        # 已用秒
+    "eta": 0,            # 预计剩余秒（按当前 percent 推算）
+    "started_at": 0.0,   # 内部用：开始时间戳
+    "result": None,
+    "error": None,
+}
+_INGEST_LOCK = threading.Lock()  # 守护 _INGEST 写入原子性，前端轮询读一致
+
+
+def _report_ingest(stage: str, percent: float, *, current: str = "",
+                    total: int = 0, done: int = 0) -> None:
+    """入库进度回调：把每一步的状态写进 _INGEST。供 pipeline.py 调用。"""
+    now = time.time()
+    with _INGEST_LOCK:
+        if not _INGEST["started_at"]:
+            _INGEST["started_at"] = now
+        elapsed = int(now - _INGEST["started_at"])
+        pct = max(0.0, min(100.0, float(percent)))
+        # 已用 > 0 且 pct > 1 时，按线性外推估算剩余
+        if pct >= 1 and elapsed > 0:
+            eta = int(elapsed * (100 - pct) / pct)
+        else:
+            eta = 0
+        _INGEST.update({
+            "stage": stage,
+            "percent": int(pct),
+            "current": current or "",
+            "done": int(done) if done else _INGEST["done"],
+            "total": int(total) if total else _INGEST["total"],
+            "elapsed": elapsed,
+            "eta": eta,
+        })
 
 
 def _run_ingest_bg():
     """在后台线程执行 ingest，进度写入 _INGEST。"""
     from kb.ingestion.pipeline import ingest as run_ingest
+    with _INGEST_LOCK:
+        _INGEST.update({
+            "running": True, "stage": "启动", "percent": 0,
+            "current": "", "done": 0, "total": 0,
+            "elapsed": 0, "eta": 0, "started_at": time.time(),
+            "result": None, "error": None,
+        })
     try:
-        def cb(stage, pct):
-            _INGEST["stage"] = stage
-            _INGEST["percent"] = pct
-        _INGEST["running"] = True
-        _INGEST["error"] = None
-        _INGEST["result"] = run_ingest(verbose=True, progress=cb)
+        result = run_ingest(verbose=True, progress=_report_ingest)
+        with _INGEST_LOCK:
+            _INGEST["result"] = result
+            _INGEST["percent"] = 100
+            _INGEST["stage"] = "完成"
+            _INGEST["eta"] = 0
     except Exception as e:
-        _INGEST["error"] = str(e)
+        with _INGEST_LOCK:
+            _INGEST["error"] = f"{type(e).__name__}: {e}"
+            _INGEST["stage"] = "出错"
     finally:
-        _INGEST["running"] = False
-        _INGEST["percent"] = 100
+        with _INGEST_LOCK:
+            _INGEST["running"] = False
 
 
 def start_bg_ingest() -> bool:
@@ -46,8 +96,11 @@ def start_bg_ingest() -> bool:
 
 @app.get("/api/ingest/progress")
 def api_ingest_progress():
-    """前端进度条轮询：{running, stage, percent, result?, error?}"""
-    return {k: _INGEST[k] for k in ("running", "stage", "percent", "result", "error")}
+    """前端进度条轮询：running/stage/percent/current/done/total/elapsed/eta/result/error"""
+    with _INGEST_LOCK:
+        return {k: _INGEST[k] for k in
+                ("running", "stage", "percent", "current", "done", "total",
+                 "elapsed", "eta", "result", "error")}
 
 # 允许前端跨域（本机开发够用）
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -68,6 +121,12 @@ class ReviewRequest(BaseModel):
 
 class SessionCreateRequest(BaseModel):
     title: str = "新会话"
+
+
+class FolderImportRequest(BaseModel):
+    path: str
+    auto: bool = True
+    topic: str = ""
 
 
 @app.get("/")
@@ -131,6 +190,9 @@ async def api_upload(files: list[UploadFile] = File(...), auto: str = Form("0"))
             # LLM 建议主题（按后缀解析读开头；pdf 不能直接 decode）
             text_head = read_head(pdir / safe_name)
             topic = suggest_topic(text_head)
+            # 自动打标签预览（多标签，入库时还会正式打一遍）
+            from kb.ingestion.tagger import suggest_tags
+            tags = suggest_tags(text_head, title=safe_name, topic=topic)
 
             if auto in ("1", "true", "True"):
                 if not topic:
@@ -138,11 +200,11 @@ async def api_upload(files: list[UploadFile] = File(...), auto: str = Form("0"))
                 moved = pending_approve(safe_name, topic)
                 moved_any = True
                 results.append({"filename": safe_name, "status": "done",
-                                "topic": topic, "path": moved["path"]})
+                                "topic": topic, "tags": tags, "path": moved["path"]})
             else:
-                pending_add(safe_name, topic, len(content), fhash)
+                pending_add(safe_name, topic, len(content), fhash, tags=tags)
                 results.append({"filename": safe_name, "status": "pending",
-                                "suggest_topic": topic, "size": len(content)})
+                                "suggest_topic": topic, "tags": tags, "size": len(content)})
         except Exception as e:
             results.append({"filename": name, "status": "error", "error": f"{type(e).__name__}: {e}"})
 
@@ -150,6 +212,21 @@ async def api_upload(files: list[UploadFile] = File(...), auto: str = Form("0"))
     if moved_any:
         start_bg_ingest()          # auto 有移动才触发一次后台入库
         resp["ingest_started"] = True
+    return resp
+
+
+@app.post("/api/import/folder")
+def api_import_folder(req: FolderImportRequest):
+    """导入本地文件夹：自动识别 .md/.docx/.pdf，LLM 分类后批量入库。
+    body: {path, auto=True, topic=""}；auto=False 时全部进待审查区。"""
+    from kb.ingestion.folder_import import import_folder
+    try:
+        summary = import_folder(req.path, auto=req.auto, topic=req.topic)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    resp = {"summary": summary}
+    if summary["imported"]:
+        resp["ingest_started"] = start_bg_ingest()
     return resp
 
 
@@ -212,7 +289,10 @@ async def api_review(req: ReviewRequest):
 async def api_pending_delete(req: ReviewRequest):
     """丢弃一条待审查。body: {filename}（topic 可空）"""
     from kb.ingestion.pending import reject
-    ok = reject(req.filename)
+    try:
+        ok = reject(req.filename)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     if not ok:
         raise HTTPException(404, "记录不存在")
     return {"ok": True}
