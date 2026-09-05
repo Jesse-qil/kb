@@ -7,6 +7,7 @@ from ..llm import LLMClient
 from ..storage.vector_store import query
 from ..web_search import web_search as _ws
 from ..prompts import TOOL_ASSISTANT_PROMPT
+from ..config import agent_cfg
 
 
 # 报错详情截断长度（防止子进程刷屏污染回答）
@@ -15,7 +16,7 @@ _MAX_DETAIL = 300
 
 def search_knowledge(query_text: str, topic: str = "") -> str:
     """检索知识库，返回最相关的片段文本（供 LLM 看）。"""
-    hits = query(query_text, topic=topic, top_k=3)
+    hits = query(query_text, topic=topic, top_k=agent_cfg()["query_top_k"])
     if not hits:
         return "知识库中没有相关内容"
     return "\n\n".join(f"[{h['source']}] {h['text']}" for h in hits)
@@ -125,8 +126,9 @@ TOOL_FUNCS = {
 
 
 # ---------- Agent 工具主循环（Function Calling 核心） ----------
-def run_agent_with_tools(question: str, max_rounds: int = 5) -> str:
+def run_agent_with_tools(question: str, max_rounds: int = 0) -> str:
     """让 LLM 自主决定：要不要调工具、调哪个、调几次，直到给出最终回答。"""
+    max_rounds = max_rounds or agent_cfg()["tool_max_rounds"]
     messages = [
         {"role": "system", "content": TOOL_ASSISTANT_PROMPT},
         {"role": "user", "content": question},

@@ -14,15 +14,15 @@ import json
 import re
 from pathlib import Path
 
-from ..config import tag_schema_file
+from ..config import tag_schema_file, tagger_cfg
 from ..llm import LLMClient
 from . import tag_store
 
-_MAX_TAGS = 6
+_MAX_TAGS = tagger_cfg()["max_tags"]
 # 分层阈值（由 scripts/tag_sim_probe.py 实测校准：
 # 101 篇文档与 35 个标签的 Top1 相似度 p50=0.597、max=0.741，0.60 可覆盖 ~47%）
-_REUSE_MIN = 0.60   # 最高相似度 ≥ 此值 → 直接复用标签，不调 LLM
-_GRAY_MIN = 0.45    # 最高相似度 < 此值 → 全新领域，LLM 生成新标签并写回
+_REUSE_MIN = tagger_cfg()["reuse_min"]   # 最高相似度 ≥ 此值 → 直接复用标签，不调 LLM
+_GRAY_MIN = tagger_cfg()["gray_min"]     # 最高相似度 < 此值 → 全新领域，LLM 生成新标签并写回
 _DEFAULT_SCHEMA = {
     "version": 1,
     "allowed_tags": [
@@ -235,7 +235,7 @@ def suggest_tags(text: str, title: str = "", topic: str = "") -> list[str]:
     fallback = _heuristic_tags(text, title=title, topic=topic)
 
     # 1) 标签库检索（主通道：覆盖种子候选 + 动态新增标签）
-    hits = tag_store.retrieve(text, top_k=5)
+    hits = tag_store.retrieve(text, top_k=tagger_cfg()["retrieve_top_k"])
     llm_tags: list[str] = []
 
     if hits and hits[0][1] >= _REUSE_MIN:

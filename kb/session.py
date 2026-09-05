@@ -11,12 +11,12 @@ import time
 import uuid
 from pathlib import Path
 
-from .config import KNOWLEDGE_DIR
+from .config import KNOWLEDGE_DIR, session_cfg
 
 _SESSIONS_DIR = KNOWLEDGE_DIR / "sessions"
 _LOCK = threading.Lock()
 
-MAX_TURNS = 6          # 喂给 LLM 的窗口轮数（不是存储上限！）
+MAX_TURNS = session_cfg()["max_turns"]  # 喂给 LLM 的窗口轮数（不是存储上限！）
 
 
 def _sanitize(session_id: str) -> str:

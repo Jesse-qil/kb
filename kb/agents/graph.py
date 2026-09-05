@@ -12,7 +12,7 @@ import threading
 from ..storage.vector_store import query, list_contents
 from ..llm import LLMClient
 from ..web_search import web_search
-from ..config import recall_cfg
+from ..config import recall_cfg, agent_cfg
 from ..prompts import (PLANNER_SYSTEM, ANSWERER_PROMPT,
                     ANSWERER_NO_DATA_PROMPT, REVIEWER_SYSTEM,
                     USER_PROFILE_BLOCK)
@@ -161,14 +161,17 @@ def retriever(state: KBState) -> dict:
         try:
             from ..ingestion.tagger import embedding_tags, _load_schema
             ptags = embedding_tags(state["question"], _load_schema(),
-                                   top_n=3, threshold=0.45)
+                                   top_n=agent_cfg()["tag_match_top_n"],
+                                   threshold=agent_cfg()["tag_match_threshold"])
         except Exception:
             ptags = []
 
     def multi_query(topic_filter: str) -> list[dict]:
         hits, seen = [], set()
         for q in state["queries"]:
-            for h in query(q, topic=topic_filter, top_k=3, tags=ptags or None):
+            for h in query(q, topic=topic_filter,
+                           top_k=agent_cfg()["query_top_k"],
+                           tags=ptags or None):
                 key = (h["source"], h["text"][:30])
                 if key not in seen:
                     seen.add(key)
@@ -294,7 +297,7 @@ def reviewer(state: KBState) -> dict:
 
 # ---------- 6. 条件边 ----------
 def should_retry(state: KBState) -> str:
-    if state["review_feedback"] == "pass" or state["rounds"] >= 3:
+    if state["review_feedback"] == "pass" or state["rounds"] >= agent_cfg()["max_review_rounds"]:
         return "accept"
     return "retry"
 

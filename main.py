@@ -306,6 +306,31 @@ def pathlib_suffix(name: str) -> str:
     return Path(name).suffix.lower()
 
 
+def _post_chat_housekeeping(session_id: str, question: str, answer: str,
+                            session) -> None:
+    """问答后的收尾（写会话 + 记忆提炼）放后台线程跑。
+
+    记忆提炼是一次 LLM 调用（数秒），若在请求线程里同步跑，
+    会拖住 SSE 连接关闭 / 阻塞 /api/chat 响应。后台执行 + 全程静默失败，
+    不影响主对话链路。
+    """
+    def _work() -> None:
+        try:
+            session.append(session_id, "user", question)
+            session.append(session_id, "assistant", answer)
+        except Exception:
+            pass
+        try:
+            from kb import memory
+            from kb.llm import LLMClient
+            memory.update_from_conversation(question, answer, LLMClient())
+        except Exception:
+            pass
+
+    import threading
+    threading.Thread(target=_work, daemon=True).start()
+
+
 @app.post("/api/ingest")
 def api_ingest():
     """扫描 raw/ 并增量导入（后台执行，前端轮询进度）。"""
@@ -333,18 +358,24 @@ def api_chat(req: ChatRequest):
     # 取该会话的历史拼文本 → 传给 graph
     history = session.get_text(req.session_id)
     result = ask(req.question, history=history)
-    # 记入历史（用户问的 + 小齐答的）
+    # 记入历史（用户问的 + 小齐答的）——保持同步，避免连续提问时历史竞争
     session.append(req.session_id, "user", req.question)
     session.append(req.session_id, "assistant", result.get("answer", ""))
-    # 回答后自动提炼用户画像写回 profile（静默失败不影响主对话）
-    try:
-        from kb import memory
-        from kb.llm import LLMClient
-        memory.update_from_conversation(
-            req.question, result.get("answer", ""), LLMClient()
-        )
-    except Exception:
-        pass
+    # 回答后自动提炼用户画像写回 profile（后台线程，不拖慢响应；静默失败）
+    if result.get("answer", "").strip():
+        import threading
+
+        def _extract() -> None:
+            try:
+                from kb import memory
+                from kb.llm import LLMClient
+                memory.update_from_conversation(
+                    req.question, result.get("answer", ""), LLMClient()
+                )
+            except Exception:
+                pass
+
+        threading.Thread(target=_extract, daemon=True).start()
     return result
 
 
@@ -376,18 +407,10 @@ def api_chat_stream(req: ChatStreamRequest):
             yield "data: " + json.dumps(
                 {"type": "error", "content": f"{type(e).__name__}: {e}"},
                 ensure_ascii=False) + "\n\n"
-        # 记入会话历史 + 长期记忆提炼（与 /api/chat 对齐，静默失败不影响主流程）
-        try:
-            session.append(req.session_id, "user", req.question)
-            session.append(req.session_id, "assistant", final["answer"])
-        except Exception:
-            pass
-        try:
-            from kb import memory
-            from kb.llm import LLMClient
-            memory.update_from_conversation(req.question, final["answer"], LLMClient())
-        except Exception:
-            pass
+        # 出错时 answer 为空：不写会话、不提炼记忆，避免污染历史
+        if final["answer"].strip():
+            _post_chat_housekeeping(req.session_id, req.question,
+                                    final["answer"], session)
 
     return StreamingResponse(
         gen(),
@@ -400,5 +423,8 @@ def api_chat_stream(req: ChatStreamRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    print("\033[92m kb-v2 启动中... 浏览器打开 http://127.0.0.1:8000\033[0m")
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    from kb.config import server_cfg
+    _srv = server_cfg()
+    print(f"\033[92m kb-v2 启动中... 浏览器打开 http://{_srv['host']}:{_srv['port']}\033[0m")
+    uvicorn.run("main:app", host=_srv["host"], port=_srv["port"],
+                reload=_srv["reload"])

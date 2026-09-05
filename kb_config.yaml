@@ -25,3 +25,30 @@ recall:
 llm:
   provider: auto
   temperature: 0.3
+
+# ===== Web 服务 =====
+server:
+  host: "127.0.0.1"
+  port: 8000
+  reload: true           # 开发期热重载；部署改 false
+
+# ===== 会话窗口 =====
+session:
+  max_turns: 6           # 喂给 LLM 的对话轮数（文件里仍保留完整历史）
+
+# ===== 多 Agent 流程 =====
+agent:
+  max_review_rounds: 3   # Reviewer 打回重写上限（防死循环）
+  tool_max_rounds: 5     # Function Calling 工具循环上限
+  query_top_k: 3         # 每条子查询检索片段数
+  tag_match_top_n: 3     # Planner 没给标签时，embedding 语义补匹配几个标签
+  tag_match_threshold: 0.45
+
+# ===== 打标签（标签自治） =====
+# 分层阈值由 scripts/tag_sim_probe.py 实测校准：
+# 101 篇文档与 35 个标签的 Top1 相似度 p50=0.597、max=0.741
+tagger:
+  max_tags: 6            # 每篇文档标签数上限
+  retrieve_top_k: 5      # 标签库检索候选数
+  reuse_min: 0.60        # 最高相似度 ≥ 此值 → 直接复用标签，不调 LLM
+  gray_min: 0.45         # 最高相似度 < 此值 → 全新领域，LLM 生成新标签并写回

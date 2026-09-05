@@ -25,6 +25,21 @@ _DEFAULT_CONFIG = {
     "embedding": {"model_name": "BAAI/bge-small-zh-v1.5"},
     "recall": {"top_k": 4, "score_threshold": 0.6},
     "llm": {"provider": "auto", "temperature": 0.3},
+    "server": {"host": "127.0.0.1", "port": 8000, "reload": True},
+    "session": {"max_turns": 6},
+    "agent": {
+        "max_review_rounds": 3,
+        "tool_max_rounds": 5,
+        "query_top_k": 3,
+        "tag_match_top_n": 3,
+        "tag_match_threshold": 0.45,
+    },
+    "tagger": {
+        "max_tags": 6,
+        "retrieve_top_k": 5,
+        "reuse_min": 0.60,
+        "gray_min": 0.45,
+    },
 }
 
 
@@ -84,3 +99,19 @@ def recall_cfg() -> dict:
 
 def embedding_cfg() -> dict:
     return CONFIG["embedding"]
+
+
+def server_cfg() -> dict:
+    return CONFIG["server"]
+
+
+def session_cfg() -> dict:
+    return CONFIG["session"]
+
+
+def agent_cfg() -> dict:
+    return CONFIG["agent"]
+
+
+def tagger_cfg() -> dict:
+    return CONFIG["tagger"]
