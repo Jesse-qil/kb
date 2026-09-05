@@ -28,7 +28,7 @@ def execute_python(code: str, timeout: float = 5.0) -> str:
     退出码约定：0 = 子进程包装层正常结束（含代码运行期异常已转文字）
                1 = 代码抛了运行期异常（wrapper 内 sys.exit(1)）
                ≠0 = 语法错误/崩溃（stderr 有 traceback）"""
-    import subprocess, sys
+    import subprocess, sys, os
 
     #   关键：wrapper 是"子进程的源码"，必须用普通字符串拼接（非 f-string），
     #   里面的 type(e).__name__ 留给子进程执行时才求值——父进程拼死会拿不到子进程异常
@@ -42,9 +42,11 @@ def execute_python(code: str, timeout: float = 5.0) -> str:
         "    sys.exit(1)\n"     # 代码异常也标退出码 1，调用方好区分
     )
     try:
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
         proc = subprocess.run(
             [sys.executable, "-c", wrapper, code],
             capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace", env=env,
         )
         out = (proc.stdout or "").strip()
         err = (proc.stderr or "").strip()

@@ -26,3 +26,7 @@ knowledge/memory/
 # 台账/向量库等衍生数据（可�? raw 重建�?
 knowledge/index/
 
+
+# 前端备份文件
+static/*.bak
+

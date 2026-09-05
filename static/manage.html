@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📚 知识库管理</title>
+<link rel="stylesheet" href="/static/css/common.css">
+<link rel="stylesheet" href="/static/css/manage.css">
+</head>
+<body>
+
+<!-- ===== 左侧边栏 ===== -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="logo">📚</div>
+    <h1>个人知识库</h1>
+  </div>
+
+  <!-- 页面导航 -->
+  <a class="nav-item" href="/static/index.html">💬 问答对话</a>
+  <a class="nav-item active" href="/static/manage.html">🗂 知识库管理</a>
+
+  <div class="sidebar-divider"></div>
+
+  <div class="kb-section">
+    <div class="kb-title">快捷操作</div>
+    <button class="kb-btn" onclick="loadAll()">🔄 刷新数据</button>
+    <button class="kb-btn" onclick="triggerIngest()">📥 扫描并入库新文档</button>
+  </div>
+
+  <div class="sidebar-footer">kb-v2 · 管理台</div>
+</aside>
+
+<div class="sidebar-mask" id="sidebarMask" onclick="toggleSidebar()"></div>
+
+<!-- ===== 主区 ===== -->
+<div class="main-area">
+  <div class="topbar">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-title">🗂 知识库管理</div>
+    <button class="topbar-btn" onclick="loadAll()">🔄 刷新</button>
+  </div>
+
+  <div class="content">
+    <div class="content-inner">
+
+      <!-- 统计卡片 -->
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-card"><div class="stat-num" id="statDocs">–</div><div class="stat-label">文档总数</div></div>
+        <div class="stat-card"><div class="stat-num" id="statChunks">–</div><div class="stat-label">向量片段</div></div>
+        <div class="stat-card"><div class="stat-num" id="statTags">–</div><div class="stat-label">标签池大小</div></div>
+        <div class="stat-card"><div class="stat-num" id="statTopics">–</div><div class="stat-label">领域分类</div></div>
+      </div>
+
+      <!-- 领域分布 + 标签 Top20 -->
+      <div class="two-col">
+        <div class="card">
+          <h3>📊 领域分布</h3>
+          <div id="topicDist"><div class="loading">加载中…</div></div>
+        </div>
+        <div class="card">
+          <h3>🏷 热门标签 Top 20</h3>
+          <div class="tag-cloud" id="tagCloud"><div class="loading">加载中…</div></div>
+        </div>
+      </div>
+
+      <!-- 文档台账 -->
+      <div class="card">
+        <h3>📄 文档台账</h3>
+        <div class="doc-toolbar">
+          <input class="doc-search" id="docSearch" placeholder="按文件名 / 标签搜索…（回车确认）">
+        </div>
+        <table class="doc-table">
+          <thead>
+            <tr><th style="width:38%">文件名</th><th style="width:14%">领域</th><th>标签</th><th style="width:14%">更新时间</th></tr>
+          </thead>
+          <tbody id="docTbody"><tr><td colspan="4" class="loading">加载中…</td></tr></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/static/js/common.js"></script>
+<script src="/static/js/manage.js"></script>
+</body>
+</html>

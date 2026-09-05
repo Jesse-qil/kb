@@ -421,6 +421,93 @@ def api_chat_stream(req: ChatStreamRequest):
     )
 
 
+# ===== 管理层接口 =====
+@app.get("/api/manage/stats")
+def api_manage_stats():
+    """管理层详细统计：文档/片段/标签分布 + 文档列表。"""
+    import os
+    from kb.config import index_file
+    from kb.storage.vector_store import count
+    index_path = str(index_file())
+    docs = {}
+    try:
+        with open(index_path, "r", encoding="utf-8") as f:
+            docs = json.load(f)
+    except Exception:
+        pass
+    tag_count = {}
+    topic_count = {}
+    doc_list = []
+    for path_, meta in docs.items():
+        topic = meta.get("topic", "未分类")
+        topic_count[topic] = topic_count.get(topic, 0) + 1
+        for t in meta.get("tags", []):
+            tag_count[t] = tag_count.get(t, 0) + 1
+        doc_list.append({
+            "path": path_,
+            "filename": os.path.basename(path_),
+            "topic": topic,
+            "tags": meta.get("tags", []),
+            "mtime": meta.get("mtime", 0),
+            "id": meta.get("id", ""),
+        })
+    tag_store_count = len(tag_count)
+    try:
+        from kb.ingestion.tag_store import list_tags
+        tag_store_count = len(list_tags())
+    except Exception:
+        pass
+    doc_list.sort(key=lambda x: x["mtime"], reverse=True)
+    top_tags = sorted(tag_count.items(), key=lambda x: x[1], reverse=True)[:20]
+    return {
+        "total_docs": len(docs),
+        "total_chunks": count(),
+        "total_tags": tag_store_count,
+        "topic_distribution": dict(sorted(topic_count.items(), key=lambda x: x[1], reverse=True)),
+        "tag_top20": [{"name": k, "count": v} for k, v in top_tags],
+        "docs": doc_list,
+    }
+
+
+@app.get("/api/docs")
+def api_docs(q: str = ""):
+    """文档列表，支持按文件名/标签搜索。"""
+    import os
+    from kb.config import index_file
+    index_path = str(index_file())
+    docs = {}
+    try:
+        with open(index_path, "r", encoding="utf-8") as f:
+            docs = json.load(f)
+    except Exception:
+        pass
+    result = []
+    q = (q or "").lower().strip()
+    for path_, meta in docs.items():
+        if q and q not in path_.lower() and q not in " ".join(meta.get("tags", [])).lower():
+            continue
+        result.append({
+            "path": path_,
+            "filename": os.path.basename(path_),
+            "topic": meta.get("topic", "未分类"),
+            "tags": meta.get("tags", []),
+            "mtime": meta.get("mtime", 0),
+        })
+    result.sort(key=lambda x: x["mtime"], reverse=True)
+    return {"docs": result, "total": len(result)}
+
+
+@app.get("/api/tags")
+def api_tags():
+    """标签列表（从标签向量库读）。"""
+    try:
+        from kb.ingestion.tag_store import list_tags
+        tags = list_tags()
+        return {"tags": tags, "total": len(tags)}
+    except Exception as e:
+        return {"tags": [], "total": 0, "error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     from kb.config import server_cfg
