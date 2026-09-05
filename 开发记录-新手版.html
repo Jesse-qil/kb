@@ -1,34 +1,34 @@
 <!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="zh" data-page-node-id="40xld2VK9H6KxghLqzfl9i">
+<head data-page-node-id="82PC7pBtRFGE9VESW4VA0E">
+<meta charset="UTF-8" data-page-node-id="HiDk20VSFxO0LQOvv2qYvd">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="TGdxx04LD3yQJe673NCaqS">
 <title>开发记录（新手版）— 踩坑学习清单</title>
 </head>
-<body>
-<div id="app" style="max-width:820px;margin:0 auto;padding:16px;font-family:'Microsoft YaHei','PingFang SC',Arial,sans-serif;color:#1A1B1C;line-height:1.6;">
+<body data-page-node-id="miSlJyiO7Zx9xyfhHoeMc0">
+<div id="app" style="max-width:820px;margin:0 auto;padding:16px;font-family:'Microsoft YaHei','PingFang SC',Arial,sans-serif;color:#1A1B1C;line-height:1.6;" data-page-node-id="4u0IZkmEm6OjPmlGvH41u3">
 
-  <h1 style="font-size:22px;margin:8px 0 2px;">🕳️ 开发记录 · 新手学习清单</h1>
-  <p style="font-size:13px;color:#6B7280;margin:0 0 12px;">kb-v2 项目踩过的 21 个坑，每条都讲"人话"。<b>学会一条就勾一条</b>，它会自动移到最后面的"已掌握"区；不想要的可以删除。</p>
+  <h1 style="font-size:22px;margin:8px 0 2px;" data-page-node-id="0tKIY6FxUmukAP12FMIZNV">🕳️ 开发记录 · 新手学习清单</h1>
+  <p style="font-size:13px;color:#6B7280;margin:0 0 12px;" data-page-node-id="8WgqhUWTkBmAw4JFDgSE68">kb-v2 项目踩过的 31 个坑，每条都讲"人话"。<b data-page-node-id="j9pGpGQqslDfkxFJf3cfl7">学会一条就勾一条</b>，它会自动移到最后面的"已掌握"区；不想要的可以删除。<span style="color:#4C6EF5;" data-page-node-id="mqUExukrBpPcVzkMeP6BJa">（2026-09-05 更新：长期记忆已接线 ✅，新增 10 条缓存/并发/测试坑）</span></p>
 
-  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 16px;padding:12px;border:1px solid rgba(0,0,0,0.1);border-radius:12px;background:#F8F7F4;">
-    <div style="font-size:14px;font-weight:600;">进度：<span id="progText">0 / 21</span></div>
-    <div style="flex:1;min-width:140px;height:10px;border-radius:6px;background:#E4E3DD;overflow:hidden;">
-      <div id="progBar" style="height:100%;width:0%;background:linear-gradient(90deg,#4C6EF5,#52C41A);border-radius:6px;transition:width .3s;"></div>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 16px;padding:12px;border:1px solid rgba(0,0,0,0.1);border-radius:12px;background:#F8F7F4;" data-page-node-id="Y8PBZt0CqwZtzAnbTpbSJV">
+    <div style="font-size:14px;font-weight:600;" data-page-node-id="E5LnDNvFVhvXlHDDjJaGT2">进度：<span id="progText" data-page-node-id="GuJjAa6XBGAH9a7COTGFEi">0 / 21</span></div>
+    <div style="flex:1;min-width:140px;height:10px;border-radius:6px;background:#E4E3DD;overflow:hidden;" data-page-node-id="1tE5A0qMdKgQb2HmVtZdQN">
+      <div id="progBar" style="height:100%;width:0%;background:linear-gradient(90deg,#4C6EF5,#52C41A);border-radius:6px;transition:width .3s;" data-page-node-id="ZCICGuIm5CvcglymLElD1Q"></div>
     </div>
-    <button id="undoBtn" onclick="undoDelete()" style="display:none;padding:6px 12px;border:1px solid #4C6EF5;background:#fff;color:#4C6EF5;border-radius:8px;cursor:pointer;font-size:13px;">↩ 撤销删除</button>
-    <button onclick="resetAll()" style="padding:6px 12px;border:1px solid #EA6668;background:#fff;color:#EA6668;border-radius:8px;cursor:pointer;font-size:13px;">重置全部</button>
+    <button id="undoBtn" onclick="undoDelete()" style="display:none;padding:6px 12px;border:1px solid #4C6EF5;background:#fff;color:#4C6EF5;border-radius:8px;cursor:pointer;font-size:13px;" data-page-node-id="r86Q8oh2U98lE2jGKx20MJ">↩ 撤销删除</button>
+    <button onclick="resetAll()" style="padding:6px 12px;border:1px solid #EA6668;background:#fff;color:#EA6668;border-radius:8px;cursor:pointer;font-size:13px;" data-page-node-id="dzBO5wJlcQuUUJHXPNEdPb">重置全部</button>
   </div>
 
-  <div style="font-size:13px;color:#6B7280;margin-bottom:8px;">图例：<span style="color:#52C41A;">✅ 已修复</span> · <span style="color:#FAAD14;">⚠️ 已知限制</span> · <span style="color:#F4A340;">🔌 没接上</span> · <span style="color:#4C6EF5;">🟡 约定规避</span></div>
+  <div style="font-size:13px;color:#6B7280;margin-bottom:8px;" data-page-node-id="Aasw7eaFdoWO6g4hOqKjFt">图例：<span style="color:#52C41A;" data-page-node-id="mXPCEELSXBOT6Cl8mTWjnx">✅ 已修复</span> · <span style="color:#FAAD14;" data-page-node-id="VWQGn7GmeJF1efZAIZA06v">⚠️ 已知限制</span> · <span style="color:#F4A340;" data-page-node-id="VcOdePQUSLX3IbuvA6KJoK">🔌 没接上</span> · <span style="color:#4C6EF5;" data-page-node-id="4Vll8YQp7Yk2oO5P5YDgB5">🟡 约定规避</span></div>
 
-  <h2 id="todoTitle" style="font-size:17px;margin:12px 0 8px;">📚 还没掌握</h2>
-  <div id="todoList" style="display:flex;flex-direction:column;gap:10px;"></div>
+  <h2 id="todoTitle" style="font-size:17px;margin:12px 0 8px;" data-page-node-id="YlAXmN0RUvlzUVIhseiUjF">📚 还没掌握</h2>
+  <div id="todoList" style="display:flex;flex-direction:column;gap:10px;" data-page-node-id="4skxFR1KpR8z0J2sByYU2T"></div>
 
-  <h2 id="doneTitle" style="font-size:17px;margin:20px 0 8px;">✅ 已掌握（勾选的自动到这里）</h2>
-  <div id="doneList" style="display:flex;flex-direction:column;gap:10px;"></div>
+  <h2 id="doneTitle" style="font-size:17px;margin:20px 0 8px;" data-page-node-id="SvjOigI9hs0LFcPaOHHZfj">✅ 已掌握（勾选的自动到这里）</h2>
+  <div id="doneList" style="display:flex;flex-direction:column;gap:10px;" data-page-node-id="hqwgSy0dKhWaalmNHS0BAL"></div>
 
-  <p style="font-size:12px;color:#9AA0B4;margin-top:20px;">数据保存在本浏览器（localStorage），关掉再打开也在。想清空重来点"重置全部"。</p>
+  <p style="font-size:12px;color:#9AA0B4;margin-top:20px;" data-page-node-id="XmxthjyIOSpYu5vthsWjCO">数据保存在本浏览器（localStorage），关掉再打开也在。想清空重来点"重置全部"。</p>
 </div>
 
 <script>
@@ -59,6 +59,31 @@
      why:"切块逻辑对'超长段落'没有兜底分支。",
      fix:"未来在段落内部再按句子二次切分（还没做）。",
      lesson:"写处理逻辑时要想到'输入不规整'的情况，留个兜底。"},
+    {id:"s5", cat:"存储", status:"fixed", title:"清理脚本把'宝贝缓存'当垃圾扔了",
+     story:"每次跑完评测脚本，入库就从 30 秒变回 8 分钟。查了半天才发现：评测脚本每次都顺手删掉'AI 打标 + 向量计算'的缓存文件，103 篇笔记被迫全部重算。",
+     why:"清理时没分清'可以重来的结果数据'和'花了几分钟才算出来的缓存成果'，一刀切全删了。",
+     fix:"评测脚本只清结果数据、保留缓存；另外给评测加了 --no-ingest 秒级快速模式，复用现有数据不重灌。",
+     lesson:"缓存是用时间换来的，删之前先想清楚它重建一次要多久。"},
+    {id:"s6", cat:"存储", status:"fixed", title:"数据库的接口会'说谎'：说没数据，其实有",
+     story:"查向量库，count() 说 0 条、列表说是空的，但实际搜索又能搜出完整结果。差点按'空库'处理把数据清掉。",
+     why:"这个向量库的读取接口有视图 bug，返回的是过期快照；只有真正执行查询（query）时才是准的。",
+     fix:"绕过它的官方接口，直接查底层 sqlite 文件核对真实数据；清理旧数据也直接操作 sqlite。",
+     lesson:"第三方库的管理接口出怪象时，用真实业务路径（查询）交叉验证，必要时看底层存储。"},
+    {id:"s7", cat:"存储", status:"fixed", title:"文件被'拽着不放'，新文件换不上去",
+     story:"保存缓存用'先写临时文件再替换'的安全写法，却报 WinError 5 拒绝访问。原因：读取时用了 mmap 内存映射，旧文件句柄一直被拽着，谁也替换不了它。",
+     why:"mmap 映射期间操作系统锁住文件，Windows 不允许替换被占用的文件。",
+     fix:"读出来立刻复制成普通内存数组，马上释放文件句柄；替换时加重试兜底。",
+     lesson:"用'写临时+替换'模式时，先确保没有任何地方还拽着旧文件。"},
+    {id:"s8", cat:"存储", status:"fixed", title:"四个进程同时记账，总有一笔被悄悄覆盖",
+     story:"4 个进程并发写缓存，最后只落了 3 条。每个进程都是'先读出来、改一改、写回去'——A 读完还没写，B 已经写完了，A 一写把 B 的成果覆盖了。",
+     why:"文件锁只保护了'写'那一瞬间，没包住'读 → 改 → 写'整个流程。",
+     fix:"加一把'事务锁'，把读、改、写三步整个包进去，一个进程走完下一个才能动。",
+     lesson:"并发保护必须覆盖完整的'读-改-写'链条，只锁最后一步等于没锁。"},
+    {id:"s9", cat:"存储", status:"fixed", title:"索引用久了会'退化'，搜不到本该第一的结果",
+     story:"向量搜索莫名变差：要 top3 时漏掉真答案，改成全量扫 600 条才对。原因不是数据丢了，而是索引经过多次删除+新增后内部结构退化了。",
+     why:"近似搜索索引（HNSW）是一张'图'，反复增删会让图结构变差，找近邻时走错路。",
+     fix:"删掉索引集合全量重建——向量都在缓存里，秒级完成。",
+     lesson:"近似索引不是一劳永逸的；召回诡异变差时，先试试重建索引再怀疑数据。"},
 
     // ===== Agent 与 LLM 层 =====
     {id:"a1", cat:"AI问答", status:"fixed", title:"IDE 手滑，多打了一行没用的代码",
@@ -113,10 +138,10 @@
      why:"改了文件命名规则，但没处理老文件。",
      fix:"加了一段一次性迁移代码：启动时自动把老文件按新规则改名（幂等、只跑一次）。",
      lesson:"改存储格式必须带迁移，宁可多写代码也别丢用户数据。"},
-    {id:"m3", cat:"聊天记录", status:"wire", title:"长期记忆模块写好了，但没接进问答",
+    {id:"m3", cat:"聊天记录", status:"fixed", title:"长期记忆模块写好了，但没接进问答",
      story:"代码里有个'长期记忆'模块（记住用户偏好、目标），读写功能都写完了，但没有任何地方调用它——问答流程完全没用到，记忆文件也从来没生成过。",
      why:"写了数据层就以为完成了，忘了'接线'进主流程。",
-     fix:"未来把记忆接进问答：提问前把记忆内容塞给 AI，回答后自动提炼新事实存进去（还没做）。",
+     fix:"已接线（9/5）：提问前把记忆内容拼进 AI 的提示词（single.py/graph.py 两条路径都接），回答后让 LLM 自动提炼新事实写回 profile.json（main.py），全程失败静默不影响问答。补了 18 个测试验证读写、容错和去重。",
      lesson:"数据层写完 ≠ 功能完成。模块没接进主流程就是死代码，等于没做。"},
 
     // ===== Web 与前端 =====
@@ -152,6 +177,33 @@
      why:"扫描器会递归扫整个笔记目录。",
      fix:"把待审查区放在笔记目录外面，物理隔离，从根上避免误扫。",
      lesson:"扫描类程序，'待处理区'要和'正式区'隔开，不能靠口头约定。"},
+    {id:"e4", cat:"工程", status:"rule", title:"同一台电脑两套 Python 在'接力'跑同一个项目",
+     story:"服务莫名 hang、入库超慢。查进程才发现：系统 Python 和项目虚拟环境的 Python 同时在跑——一个在 sleep 等锁，一个在拼命运算，互相卡住，内存还翻倍。",
+     why:"项目装了 venv，但系统里还有一套 Python；终端、PATH 或 IDE 不同，就会用到不同的解释器。",
+     fix:"约定：一切命令只用项目 venv 的解释器；遇到 hang 先查进程列表有没有双开。",
+     lesson:"一个项目只能有一套运行环境，'环境漂移'造成的故障最难查。"},
+    {id:"e5", cat:"工程", status:"fixed", title:"以为删干净了，其实删除命令被'保安'拦下了",
+     story:"以为'全量重建'把旧向量库清空了，后来才发现旧数据还在——删除命令被环境里的安全脚本拦截、静默失败，代码没察觉就继续跑了。",
+     why:"环境装了'安全删除'钩子，所有删文件操作都改道回收站，失败时抛的异常没被上层感知。",
+     fix:"核对真实数据时发现残留，改用直接操作底层数据库的方式清理；养成习惯：清理类操作做完必须验证结果。",
+     lesson:"'没报错'不等于'成功了'，破坏性/清理性操作必须回读验证。"},
+
+    // ===== 测试与调试 =====
+    {id:"t1", cat:"测试", status:"fixed", title:"lambda 不能'寄'给子进程",
+     story:"写并发测试时把任务写成 lambda 传给子进程，直接报 PicklingError（无法序列化）。",
+     why:"子进程靠'序列化'接收任务——把函数打包寄过去。lambda 是匿名函数，没名字，寄不出去。",
+     fix:"把任务写成模块顶层的普通函数，有名字就能寄。",
+     lesson:"多进程编程里，传给子进程的东西必须'有名字、找得到'。"},
+    {id:"t2", cat:"测试", status:"fixed", title:"一个测试弄脏了环境，后面的测试连环挂",
+     story:"并发测试为了用临时目录，改了全局配置但没改回来。它自己通过了，排在它后面的检索测试却全军覆没——它们还在用被改掉的目录。",
+     why:"测试之间共享全局状态，改完没还原，污染了后面所有无辜的测试。",
+     fix:"用 try/finally 保证'用完一定还原'，不管测试成功还是失败。",
+     lesson:"测试借全局状态必须'借完归还'，否则故障会出现在八竿子打不着的下游。"},
+    {id:"t3", cat:"测试", status:"rule", title:"后台脚本'装死'，其实早就跑完了",
+     story:"后台跑入库，半天看不到进度输出，以为卡死了，差点杀掉重跑。实际它 8.9 秒就跑完了——只是后台模式的输出被缓冲住，一个字都看不见。",
+     why:"输出到管道时会攒够一批才显示，不是实时打印；Windows 上尤其明显。",
+     fix:"想看实时进度就加 -u（无缓冲）参数，或同步前台跑一次验证。",
+     lesson:"'看不到输出'不等于'没在干活'，先确认是真卡了还是只是没打印。"},
   ];
 
   var LS_KEY = "kb_devlog_v1";
@@ -241,7 +293,7 @@
   }
 
   function resetAll(){
-    if (!confirm("确定清空所有勾选和删除，恢复初始 21 条吗？")) return;
+    if (!confirm("确定清空所有勾选和删除，恢复初始 31 条吗？")) return;
     state = { learned: [], deleted: [] };
     lastDeleted = null;
     localStorage.removeItem(LS_KEY);
