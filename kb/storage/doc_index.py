@@ -51,12 +51,15 @@ def update(scan_rows: dict) -> dict:
     for rel, info in scan_rows.items():
         prev = old.get(rel)
         doc_id = prev["id"] if prev else next_id({**old, **new_rows})
+        tags = info.get("tags")
+        if tags is None:
+            tags = prev.get("tags", []) if prev else []
         new_rows[rel] = {
             "id": doc_id,
             "topic": info["topic"],
             "hash": info["hash"],
             "mtime": info["mtime"],
-            "tags": prev.get("tags", []) if prev else [],
+            "tags": tags,
         }
     save(new_rows)
     return new_rows

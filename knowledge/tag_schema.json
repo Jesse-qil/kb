@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "allowed_tags": [
+    "Python",
+    "Python基础",
+    "语法",
+    "函数",
+    "装饰器",
+    "面向对象",
+    "集合",
+    "文件处理",
+    "正则",
+    "Web",
+    "FastAPI",
+    "CLI",
+    "前端",
+    "数据结构",
+    "算法",
+    "并发",
+    "异步",
+    "协程",
+    "多线程",
+    "事件循环",
+    "面试",
+    "项目",
+    "笔记",
+    "总结",
+    "资料",
+    "LLM",
+    "RAG",
+    "Agent",
+    "LangGraph",
+    "向量检索",
+    "工具调用",
+    "会话记忆",
+    "文档处理",
+    "Markdown",
+    "PDF"
+  ],
+  "fallback_tags": [
+    "笔记",
+    "资料",
+    "项目"
+  ],
+  "topic_hints": {
+    "notes_draft": ["笔记", "总结"],
+    "reference": ["资料", "教程"],
+    "project_material": ["项目", "实现", "调试"],
+    "AI-Agent": ["LLM", "Agent", "RAG"]
+  }
+}

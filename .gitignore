@@ -11,8 +11,15 @@ knowledge/export/
 # 大 PDF 本地保留不入库
 knowledge/raw/AI-Agent/AI-Agents-in-Depth-zh-CN.pdf
 
+# 原始资料（个人笔记数据，13MB+，不入库，可通过 raw 重建）
+knowledge/raw/
+
 # 会话历史（运行时数据，不入库）
 knowledge/sessions/
 knowledge/memory/
 
 .workbuddy/
+
+# 鍙拌处/鍚戦噺搴撶瓑琛嶇敓鏁版嵁锛堝彲鐢? raw 閲嶅缓锛?
+knowledge/index/
+

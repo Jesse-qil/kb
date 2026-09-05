@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""会话管理（升级版）：多会话 + 文件持久化。
-- 每个会话存 knowledge/sessions/s_<id>.json：完整历史 + 标题 + 创建时间
+"""会话管理：多会话 + 文件持久化。
+- 每个会话存 knowledge/sessions/<id>.json：完整历史 + 标题 + 创建时间
+
 - 服务重启历史不丢
 - get_text() 仍只取最近 N 轮喂 prompt（窗口），但文件里保留完整历史
 状态层：只管存取，不决定怎么用。"""
@@ -18,15 +19,44 @@ _LOCK = threading.Lock()
 MAX_TURNS = 6          # 喂给 LLM 的窗口轮数（不是存储上限！）
 
 
+def _sanitize(session_id: str) -> str:
+    # 防目录穿越：只接受我们生成的 id（s_xxxxxx）
+    return session_id.replace("/", "_").replace("\\", "_")
+
+
 def _dir() -> Path:
     _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    _migrate_legacy()
     return _SESSIONS_DIR
 
 
+_MIGRATED = False
+
+
+def _migrate_legacy() -> None:
+    """旧数据兼容（幂等，进程内只跑一次）：
+    历史上 _path() 多拼过一层 s_，产生过 s_s_xxx.json 这类文件——
+    列表能列出（读的是文件内 id），但按 sid 找不到文件、历史读不到。
+    现在按【文件内记录的 id】重命名为 <id>.json，保证列表可见 ⇔ 历史可读。"""
+    global _MIGRATED
+    if _MIGRATED:
+        return
+    _MIGRATED = True
+    for p in _SESSIONS_DIR.glob("*.json"):
+        try:
+            s = json.loads(p.read_text(encoding="utf-8"))
+            sid = s.get("id", "")
+            if not sid or not isinstance(sid, str):
+                continue
+            target = p.parent / f"{_sanitize(sid)}.json"
+            if target != p and not target.exists():
+                p.rename(target)
+        except Exception:
+            continue
+
+
 def _path(session_id: str) -> Path:
-    # 防目录穿越：只接受我们生成的 id（s_xxxx）
-    safe = session_id.replace("/", "_").replace("\\", "_")
-    return _dir() / f"s_{safe}.json"
+    return _dir() / f"{_sanitize(session_id)}.json"
 
 
 def _load(session_id: str) -> dict:
@@ -58,7 +88,7 @@ def list_sessions() -> list[dict]:
     """返回会话列表（按创建时间倒序）：[{id, title, created, msg_count}]"""
     out = []
     with _LOCK:
-        for p in _dir().glob("s_*.json"):
+        for p in _dir().glob("*.json"):
             try:
                 s = json.loads(p.read_text(encoding="utf-8"))
                 out.append({

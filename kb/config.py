@@ -1,17 +1,48 @@
 """配置中心：读 kb_config.yaml，提供统一的路径与参数常量。
 设计：所有代码不写死路径，都从这里拿 → 改配置不用改代码。"""
 from pathlib import Path
-import yaml
+import json
+
+try:
+    import yaml
+except Exception:
+    yaml = None
 
 # 项目根 = kb 包（本文件）的上一级
 KB_ROOT = Path(__file__).resolve().parent.parent
 # 知识库数据根（raw / index / vector_store / chunks 都在它下面）
 KNOWLEDGE_DIR = KB_ROOT / "knowledge"
 
+_DEFAULT_CONFIG = {
+    "scan": {
+        "raw_root": "raw",
+        "compiled_root": "compiled_wiki",
+        "enable_compiled_layer": False,
+        "file_suffix": [".md", ".docx", ".pdf"],
+        "exclude_dirs": [],
+    },
+    "split": {"chunk_size": 400, "chunk_overlap": 120},
+    "embedding": {"model_name": "BAAI/bge-small-zh-v1.5"},
+    "recall": {"top_k": 4, "score_threshold": 0.6},
+    "llm": {"provider": "auto", "temperature": 0.3},
+}
+
 
 def load_config() -> dict:
-    with open(KB_ROOT / "kb_config.yaml", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    cfg_file = KB_ROOT / "kb_config.yaml"
+    if yaml is None:
+        # 轻量环境下没有 PyYAML 时，直接回退到内置默认配置。
+        # 这能保证项目可启动；有需要再通过安装依赖启用 YAML 覆盖。
+        return json.loads(json.dumps(_DEFAULT_CONFIG))
+    with open(cfg_file, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    merged = json.loads(json.dumps(_DEFAULT_CONFIG))
+    for k, v in data.items():
+        if isinstance(v, dict) and isinstance(merged.get(k), dict):
+            merged[k].update(v)
+        else:
+            merged[k] = v
+    return merged
 
 
 # 模块加载时读一次（改 yaml 后重启进程生效）
@@ -37,6 +68,10 @@ def chroma_dir() -> Path:
 
 def chunks_file() -> Path:
     return KNOWLEDGE_DIR / "chunks" / "chunk_cache.jsonl"
+
+
+def tag_schema_file() -> Path:
+    return KNOWLEDGE_DIR / "tag_schema.json"
 
 
 def split_cfg() -> dict:

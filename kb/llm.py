@@ -2,8 +2,16 @@
 复用旧项目 app/llm.py 验证过的逻辑，配置改从 kb_config.yaml 读取。"""
 import os
 from pathlib import Path
-from openai import OpenAI
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except Exception:
+    def load_dotenv(*args, **kwargs):
+        return False
+
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 
 from .config import KB_ROOT, CONFIG
 
@@ -43,11 +51,15 @@ class LLMClient:
             self.provider = self._detect_provider()
         self.temperature = cfg.get("temperature", 0.3)
 
-        if self.provider == "mock":
+        if self.provider == "mock" or OpenAI is None:
             self.client = None
             self.model = "mock"
-            self.mock_answer = cfg.get("mock_answer",
-                "【mock】还没配置真实大模型：在 .env 填 DEEPSEEK_API_KEY 后重启即可得到真实回答。")
+            if self.provider != "mock":
+                self.provider = "mock"
+            self.mock_answer = cfg.get(
+                "mock_answer",
+                "【mock】还没配置真实大模型或缺少 openai 依赖：在 .env 填 API key 并安装依赖后重启即可得到真实回答。",
+            )
         else:
             info = PROVIDERS[self.provider]
             api_key = "ollama" if info["env_key"] is None else self._get_key(info["env_key"])

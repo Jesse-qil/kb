@@ -8,6 +8,24 @@ from ..config import pending_dir, raw_dir
 _INDEX = "pending.json"
 
 
+def _check_filename(filename: str) -> str:
+    """文件名白名单校验：只接受纯文件名，拒绝任何路径成分。
+    approve/reject 都会拼 Path 后 move/unlink，绝不能放行 ../ 或绝对路径。"""
+    if not filename or filename in (".", ".."):
+        raise ValueError(f"非法文件名: {filename!r}")
+    if "/" in filename or "\\" in filename or Path(filename).name != filename:
+        raise ValueError(f"非法文件名（不允许路径）: {filename!r}")
+    return filename
+
+
+def _check_topic(topic: str) -> str:
+    """主题校验：只允许单层目录名，防 raw/.. 之类的越界写。"""
+    t = (topic or "").strip().strip("/\\")
+    if not t or t in (".", "..") or "/" in t or "\\" in t:
+        raise ValueError(f"主题不合法: {topic!r}")
+    return t
+
+
 def _pending_file() -> Path:
     return pending_dir() / _INDEX
 
@@ -25,13 +43,17 @@ def _save(rows: dict) -> None:
         json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def add(filename: str, suggest_topic: str, size: int, content_hash: str = "") -> dict:
+def add(filename: str, suggest_topic: str, size: int,
+        content_hash: str = "", tags: list[str] | None = None) -> dict:
     """登记一条待审查（文件本身已由 API 写入 pending/）。
-    content_hash: 内容 md5，用于待审查区内部去重。"""
+    content_hash: 内容 md5，用于待审查区内部去重。
+    tags: 上传时自动打的标签预览（正式打标在入库时还会做一次）。"""
+    filename = _check_filename(filename)
     rows = _load()
     # 同名已存在 → 覆盖旧文件与记录
     rows[filename] = {
         "suggest_topic": suggest_topic,
+        "tags": [str(t) for t in (tags or [])][:6],
         "size": size,
         "hash": content_hash,
         "time": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -62,12 +84,11 @@ def list_all() -> list[dict]:
 
 def approve(filename: str, topic: str) -> dict:
     """审查通过：文件从 pending/ 移到 raw/<topic>/，返回落盘路径；失败抛异常。"""
+    filename = _check_filename(filename)
+    topic = _check_topic(topic)
     src = pending_dir() / filename
     if not src.exists():
         raise FileNotFoundError(f"待审查文件不存在: {filename}")
-    topic = (topic or "").strip().strip("/\\")
-    if not topic:
-        raise ValueError("主题不能为空")
     dest_dir = raw_dir() / topic
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / filename
@@ -81,6 +102,7 @@ def approve(filename: str, topic: str) -> dict:
 
 def reject(filename: str) -> bool:
     """丢弃待审查文件（删除实体 + 记录）。"""
+    filename = _check_filename(filename)
     src = pending_dir() / filename
     if src.exists():
         src.unlink()

@@ -16,7 +16,8 @@ embedding:
 
 recall:
   top_k: 4                 # 每次提问检索几个相关片段
-  score_threshold: 0.6     # 低于此相似度视为"没找到"，弱资料不给
+  score_threshold: 0.45    # 低于此相似度视为"没找到"（bge-small-zh 正常命中多在 0.45~0.62；
+                           # 0.6 会把大量正解拒掉转联网；标签融合分上限 +0.12 已并入 score）
 
 # ===== 大模型配置（OpenAI 兼容接口，多提供商可切换） =====
 # provider: deepseek / openai / siliconflow / ollama / mock / auto

@@ -19,6 +19,7 @@ from ..prompts import (PLANNER_SYSTEM, ANSWERER_PROMPT,
 class KBState(TypedDict):
     question: str            # 用户的问题
     topic: str               # Planner 判断出的领域（如 "notes_draft"）
+    tags: list[str]          # Planner 给的候选标签（检索加权用）
     queries: list[str]       # Planner 拆出的检索查询
     hits: list[dict]         # 检索结果
     answer: str
@@ -52,24 +53,37 @@ def _get_topics() -> list[str]:
         return []
 
 
+def _get_candidate_tags() -> list[str]:
+    """候选标签表（Planner 输出用），来自 tagger 的 schema。"""
+    try:
+        from ..ingestion.tagger import _load_schema
+        return [t for t in _load_schema().get("allowed_tags", []) if t]
+    except Exception:
+        return []
+
+
 # ---------- 2. Agent 1：Planner ----------
 def planner(state: KBState) -> dict:
     topics = _get_topics()
     cand = "、".join(topics) if topics else "默认"
+    tags = _get_candidate_tags()
     system = PLANNER_SYSTEM.format(cand=cand)
-    user = f"""对问题做三件事，只输出 JSON（不要多余文字）：
-    {{"overview": true/false, "topic": "领域名（必须是候选之一，都不像填 默认）", "queries": ["查询1", "查询2"]}}
+    user = f"""对问题做四件事，只输出 JSON（不要多余文字）：
+    {{"overview": true/false, "topic": "领域名（必须是候选之一，都不像填 默认）", "tags": ["标签1", "标签2"], "queries": ["查询1", "查询2"]}}
     overview=true 当且仅当问题是在问"知识库里有什么/包含哪些/目录"这类总览问题。
+    tags：从候选标签里挑 0-4 个跟问题最相关的（宁缺毋滥，没有合适就空数组）。
+    候选标签：{('、'.join(tags)) if tags else '（无）'}
     问题：{state["question"]}"""
     try:
         data = json.loads(_chat(system, user))
         topic = data.get("topic", "默认")
         queries = data.get("queries") or [state["question"]]
         is_overview = bool(data.get("overview", False))
+        ptags = [str(t) for t in (data.get("tags") or []) if str(t).strip()][:4]
     except Exception:
-        topic, queries, is_overview = "默认", [state["question"]], False
-    print(f"[Planner] 领域={topic} 查询={queries} 总览={is_overview}")
-    return {"topic": topic, "queries": queries, "is_overview": is_overview}
+        topic, queries, is_overview, ptags = "默认", [state["question"]], False, []
+    print(f"[Planner] 领域={topic} 标签={ptags} 查询={queries} 总览={is_overview}")
+    return {"topic": topic, "tags": ptags, "queries": queries, "is_overview": is_overview}
 
 
 # ---------- 2.5 总览节点 ----------
@@ -99,16 +113,44 @@ def overview(state: KBState) -> dict:
 
 # ---------- 3. Agent 2：Retriever ----------
 def retriever(state: KBState) -> dict:
-    """按领域多查询检索；弱相关（最高分<阈值）转联网。"""
+    """两段式检索：
+    1) 主题过滤 + 多查询 + 标签加权（精准路）
+    2) 弱相关且 Planner 给了标签 → 全库不过滤 + 标签加权重试（兜底路，
+       笔记归错目录/问题跨领域时救回来）
+    仍弱相关才转联网。"""
     threshold = recall_cfg()["score_threshold"]
-    hits, seen = [], set()
-    for q in state["queries"]:
-        for h in query(q, topic=state["topic"] if state["topic"] != "默认" else "", top_k=3):
-            key = (h["source"], h["text"][:30])
-            if key not in seen:
-                seen.add(key)
-                hits.append(h)
-    hits.sort(key=lambda h: h["score"], reverse=True)   # ★ 多查询合并后按分数降序
+    ptags = state.get("tags") or []
+    if not ptags:
+        # Planner 没给标签（LLM 弱/mock）→ 用问题的 embedding 语义匹配标签表，
+        # 确定性通道，不依赖 LLM
+        try:
+            from ..ingestion.tagger import embedding_tags, _load_schema
+            ptags = embedding_tags(state["question"], _load_schema(),
+                                   top_n=3, threshold=0.45)
+        except Exception:
+            ptags = []
+
+    def multi_query(topic_filter: str) -> list[dict]:
+        hits, seen = [], set()
+        for q in state["queries"]:
+            for h in query(q, topic=topic_filter, top_k=3, tags=ptags or None):
+                key = (h["source"], h["text"][:30])
+                if key not in seen:
+                    seen.add(key)
+                    hits.append(h)
+        hits.sort(key=lambda h: h["score"], reverse=True)
+        return hits
+
+    tf = state["topic"] if state["topic"] != "默认" else ""
+    hits = multi_query(tf)
+
+    if (not hits or hits[0]["score"] < threshold) and ptags:
+        print("[检索] 主题过滤下弱相关，标签加权全库重试…")
+        hits2 = multi_query("")
+        if hits2 and hits2[0]["score"] >= threshold:
+            print(f"[检索] 全库+标签加权命中 {len(hits2[:6])} 条（主题过滤曾漏掉）")
+            hits = hits2
+
     if not hits or hits[0]["score"] < threshold:
         print("[检索] 知识库弱相关，转联网…")
         web = web_search(state["question"])
@@ -203,8 +245,12 @@ def answerer(state: KBState) -> dict:
 # ---------- 5. Agent 4：Reviewer ----------
 def reviewer(state: KBState) -> dict:
     system = REVIEWER_SYSTEM
-    user = f"问题：{state['question']}\n\n参考资料：\n" + \
-           "\n".join(f"[{h['source']}] {h['text'][:100]}" for h in state["hits"]) + \
+    # 参考依据 = 检索命中 + 工具结果。
+    # 工具型答案（计算/联网）不看 tool_result 就等于拿空参考审查，会误判重试。
+    refs = "\n".join(f"[{h['source']}] {h['text'][:100]}" for h in state["hits"])
+    if state.get("tool_result"):
+        refs += f"\n[工具结果] {state['tool_result'][:500]}"
+    user = f"问题：{state['question']}\n\n参考资料：\n{refs}" + \
            f"\n\n回答：\n{state['answer']}"
     fb = _chat(system, user).strip()
     print(f"[审查] {fb}")
@@ -246,7 +292,7 @@ def build_graph():
 # ---------- 8. 对外接口 ----------
 def ask(question: str, history: str = "") -> dict:
     result = build_graph().invoke({
-        "question": question, "topic": "", "queries": [],
+        "question": question, "topic": "", "tags": [], "queries": [],
         "hits": [], "answer": "", "review_feedback": "", "rounds": 0,
         "from_web": False, "is_overview": False,
         "history": history,          # 之前对话（可为空）
