@@ -14,6 +14,9 @@ knowledge/raw/AI-Agent/AI-Agents-in-Depth-zh-CN.pdf
 # 原始资料（个人笔记数据，13MB+，不入库，可通过 raw 重建）
 knowledge/raw/
 
+# benchmark 跑出来的动态产物（latest.json / latest.md 会随每次跑变）
+tests/results/latest.*
+
 # 会话历史（运行时数据，不入库）
 knowledge/sessions/
 knowledge/memory/
