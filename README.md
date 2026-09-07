@@ -109,7 +109,7 @@ kb-v2/
 ├─ tests/                  # pytest 60 例 + 检索 benchmark + Agent 评测
 ├─ scripts/                # 运维脚本（clear_chroma 等）
 ├─ knowledge/              # 数据层（raw 原始笔记 / 台账 / 向量库，均可重建）
-├─ person_document/        # 项目文档（项目文档.md / 开发记录.md / 面试八股深挖.md）
+├─ person_document/        # 项目文档（面试八股深挖.md 公开；其余本地维护）
 ├─ kb_config.yaml          # 知识库配置（分块、召回、Agent、打标参数）
 └─ requirements.txt
 ```
@@ -164,6 +164,5 @@ python tests/agent_eval.py                     # Agent 自动评测（50 例）
 | 文档 | 内容 |
 |---|---|
 | `README.md` | 本文件：公开介绍 + 开发备忘 |
-| `person_document/项目文档.md` | 项目全貌三合一：计划书（架构/阶段/风险）+ P1 功能设计 + 理解指南 |
-| `person_document/开发记录.md` | 开发记录两合一：详细踩坑 + 新手学习清单 34 条 |
-| `person_document/面试八股深挖.md` | 求职面试问答（十层深挖 + 自测清单） |
+| `person_document/面试八股深挖.md` | 项目深度面试问答（公开） |
+| 项目文档.md / 开发记录.md | 本地维护，未公开（`.gitignore` 忽略 `person_document/`） |
