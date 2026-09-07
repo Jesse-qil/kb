@@ -1,32 +1,60 @@
+# ===== Python =====
 .venv/
 __pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# ===== 环境变量（含 API Key，绝不能上传）=====
+.env
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ===== 知识库衍生数据（可由 raw 重建，体积大）=====
 knowledge/vector_store/
 knowledge/chunks/
 knowledge/temp/
 knowledge/export/
-.env
-
-.idea/
-
-# �� PDF ���ر��������
-knowledge/raw/AI-Agent/AI-Agents-in-Depth-zh-CN.pdf
-
-# ԭʼ���ϣ����˱ʼ����ݣ�13MB+������⣬��ͨ�� raw �ؽ���
-knowledge/raw/
-
-# benchmark �ܳ����Ķ�̬���latest.json / latest.md ����ÿ���ܱ䣩
-tests/results/latest.*
-
-# �Ự��ʷ������ʱ���ݣ�����⣩
+knowledge/index/
 knowledge/sessions/
 knowledge/memory/
 
+# 原始笔记（私人内容，默认不上传；如需公开请单独处理）
+knowledge/raw/
+
+# 单个大文件豁免（如有需要公开的 PDF，可取消注释）
+# !knowledge/raw/AI-Agent/AI-Agents-in-Depth-zh-CN.pdf
+
+# ===== 评估结果（每次运行都会变，保留 .gitkeep 占位）=====
+tests/results/*
+!tests/results/.gitkeep
+
+# ===== 日志 =====
+*.log
+
+# ===== 生成的 HTML 报告（可选，如需展示可取消注释）=====
+person_document/开发记录-新手版.html
+person_document/项目评价报告.html
+
+# ===== 工作目录 =====
 .workbuddy/
 
-# 台账/向量库等衍生数据（可�? raw 重建�?
-knowledge/index/
-
-
-# 前端备份文件
+# ===== 前端备份 =====
 static/*.bak
 
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# ===== 个人文档 =====
+person_document/
