@@ -166,3 +166,7 @@ python tests/agent_eval.py                     # Agent 自动评测（50 例）
 | `README.md` | 本文件：公开介绍 + 开发备忘 |
 | `person_document/面试八股深挖.md` | 项目深度面试问答（公开） |
 | 项目文档.md / 开发记录.md | 本地维护，未公开（`.gitignore` 忽略 `person_document/`） |
+
+## License
+
+[MIT](LICENSE) © 2026 Jesse-qil
