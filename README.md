@@ -19,29 +19,44 @@
 
 ```mermaid
 flowchart TB
-    subgraph 接口层
-        A1["FastAPI Web API<br/>(/api/chat /api/ingest /api/upload)"]
-        A2["CLI<br/>(scan / ingest / query / ask)"]
-        A3["前端三页<br/>(问答/管理/评估)"]
+    subgraph L1[接口层]
+        A1[FastAPI Web API]
+        A2[CLI 命令行]
+        A3[前端三页]
     end
-    subgraph Agent层
-        B1["单 Agent<br/>检索→拼上下文→LLM"]
-        B2["多 Agent (LangGraph)<br/>Planner→Retriever→Answerer→Reviewer"]
-        B3["工具调用 (Function Calling)<br/>查库 / 执行Python / 联网"]
+
+    subgraph L2[Agent 层]
+        B1[单 Agent 问答]
+        B2[多 Agent 协作 LangGraph]
+        B3[Function Calling 工具]
     end
-    subgraph 数据层
-        C1["Ingestion<br/>扫描→分块→打标→向量化→台账"]
-        C2["Storage<br/>Chroma 向量 + BM25 双路召回"]
-        C3["doc_index 台账<br/>(编号/hash/标签)"]
+
+    subgraph L3[数据层]
+        C1[Ingestion 增量管道]
+        C2[Storage 双路召回]
+        C3[doc_index 台账]
     end
-    subgraph 基础设施
-        D1["bge-small-zh 本地向量化"]
-        D2["多提供商 LLM (DeepSeek 等)"]
-        D3["长期记忆 / 会话记忆 / 配置中心"]
+
+    subgraph L4[基础设施]
+        D1[本地 bge 向量化]
+        D2[多提供商 LLM]
+        D3[记忆 / 配置中心]
     end
-    A1 & A2 & A3 --> B1 & B2 & B3
-    B1 & B2 & B3 --> C1 & C2 & C3
-    C1 & C2 & C3 --> D1 & D2 & D3
+
+    A1 --> B1
+    A1 --> B2
+    A1 --> B3
+    A2 --> B1
+    A2 --> B2
+    A3 --> B2
+    A3 --> B3
+    B1 --> C1
+    B2 --> C1
+    B2 --> C2
+    B3 --> C2
+    C1 --> D1
+    C2 --> D2
+    C3 --> D3
 ```
 
 **依赖方向只从上往下**：接口层 → Agent 层 → 数据层 → 基础设施，底层不感知上层存在，各层可独立测试与替换。
