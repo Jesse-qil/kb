@@ -19,6 +19,7 @@
   <!-- 页面导航 -->
   <a class="nav-item active" href="/static/index.html">💬 问答对话</a>
   <a class="nav-item" href="/static/manage.html">🗂 知识库管理</a>
+  <a class="nav-item" href="/static/eval_dashboard.html">📊 评估仪表盘</a>
 
   <button class="new-sess-btn" onclick="newSession()">＋ 新建会话</button>
 
@@ -30,14 +31,6 @@
 
   <div class="kb-section">
     <div class="kb-title">知识库</div>
-    <label class="auto-mode-label">
-      <input type="checkbox" id="autoMode"> 自动入库
-    </label>
-    <div class="kb-btn-row">
-      <button class="kb-btn" onclick="document.getElementById('fileInput').click()">⬆ 上传</button>
-      <button class="kb-btn" onclick="importFolder()" title="导入服务器本地文件夹">📁 导入</button>
-      <button class="kb-btn" onclick="ingest()" title="重新扫描并导入">🔄 重导</button>
-    </div>
     <button id="pendingBtn" class="pending-btn" onclick="togglePending()" style="display:none">
       📋 待审查 <span id="pendingCount" class="dot-badge">0</span>
     </button>
@@ -98,7 +91,6 @@
   </div>
 </main>
 
-<input type="file" id="fileInput" accept=".md,.docx,.pdf" multiple style="display:none" onchange="upload()">
 <div id="toast-container"></div>
 
 <script src="/static/js/common.js"></script>

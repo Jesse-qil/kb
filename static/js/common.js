@@ -39,3 +39,17 @@ function closeSidebar() {
   if (sb) sb.classList.remove("open");
   if (mask) mask.classList.remove("show");
 }
+
+/* ===== 页面切换动画：点击导航先淡出再跳转（三页共用） ===== */
+(function () {
+  document.addEventListener("click", function (e) {
+    const a = e.target && e.target.closest ? e.target.closest("a.nav-item") : null;
+    if (!a) return;
+    if (a.classList.contains("active")) return;   // 当前页不跳
+    const href = a.getAttribute("href");
+    if (!href || href === "#") return;
+    e.preventDefault();
+    document.body.classList.add("leaving");
+    setTimeout(function () { window.location.href = href; }, 160);
+  });
+})();

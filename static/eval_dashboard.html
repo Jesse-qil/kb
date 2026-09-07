@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 评估仪表盘 - kb-v2</title>
+<link rel="stylesheet" href="/static/css/common.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+/* ===== 评估仪表盘私有样式（布局骨架走 common.css，与问答/管理页一致） ===== */
+.content { flex: 1; overflow-y: auto; min-width: 0; }
+.container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+.eval-meta { font-size: 12px; color: var(--text-dim, #8b98ad); }
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 24px 0 12px;
+  color: #c5d0e0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-title::before {
+  content: '';
+  width: 4px;
+  height: 18px;
+  background: #667eea;
+  border-radius: 2px;
+}
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.metric-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.metric-label {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 8px;
+}
+.metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1b1c;
+}
+.metric-value .unit { font-size: 14px; font-weight: 400; color: #888; margin-left: 2px; }
+.metric-bar {
+  height: 6px;
+  background: #eee;
+  border-radius: 3px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.metric-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.chart-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.chart-card.full { grid-column: 1 / -1; }
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+}
+.chart-container { width: 100%; height: 300px; }
+.confusion-matrix {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: 2px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+.cm-cell {
+  padding: 16px;
+  text-align: center;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.cm-header { background: #f0f0f0; font-weight: 600; color: #555; }
+.cm-label { background: #f0f0f0; font-weight: 600; color: #555; display: flex; align-items: center; justify-content: center; }
+.cm-tp { background: #d4edda; color: #155724; }
+.cm-fp { background: #f8d7da; color: #721c24; }
+.cm-fn { background: #fff3cd; color: #856404; }
+.cm-tn { background: #d1ecf1; color: #0c5460; }
+.cm-value { font-size: 24px; font-weight: 700; display: block; }
+.cm-desc { font-size: 11px; opacity: 0.8; }
+.failures-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+.failure-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #eee;
+  font-size: 13px;
+}
+.failure-item:last-child { border-bottom: none; }
+.failure-id {
+  display: inline-block;
+  background: #f8d7da;
+  color: #721c24;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 8px;
+}
+.failure-q { color: #333; font-weight: 500; }
+.failure-reason { color: #888; font-size: 12px; margin-top: 4px; padding-left: 4px; }
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: var(--text-dim, #8b98ad);
+  font-size: 16px;
+}
+.error-box {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  margin: 40px auto;
+  max-width: 600px;
+}
+@media (max-width: 900px) {
+  .chart-grid { grid-template-columns: 1fr; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 左侧边栏（与问答/管理页一致） ===== -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="logo">📊</div>
+    <h1>个人知识库</h1>
+  </div>
+
+  <!-- 页面导航：三页互通 -->
+  <a class="nav-item" href="/static/index.html">💬 问答对话</a>
+  <a class="nav-item" href="/static/manage.html">🗂 知识库管理</a>
+  <a class="nav-item active" href="/static/eval_dashboard.html">📊 评估仪表盘</a>
+
+  <div class="sidebar-divider"></div>
+
+  <div class="kb-section">
+    <div class="kb-title">快捷操作</div>
+    <button class="kb-btn" onclick="runEval()" id="sidebarRunEvalBtn">▶️ 生成评估</button>
+  </div>
+
+  <div class="kb-section">
+    <div class="kb-title">评估说明</div>
+    <div style="font-size:12px; color:var(--text-dim,#8b98ad); line-height:1.7;">
+      数据来自 <code style="color:#5aa2f8;">tests/agent_eval.py</code><br>
+      完整50条约15-20分钟<br>
+      运行后自动刷新仪表盘
+    </div>
+  </div>
+
+  <div class="sidebar-footer">kb-v2 · Agent 评估</div>
+</aside>
+
+<div class="sidebar-mask" id="sidebarMask" onclick="toggleSidebar()"></div>
+
+<!-- ===== 主区 ===== -->
+<main class="main-area">
+  <div class="topbar">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-title">📊 Agent 评估仪表盘</div>
+    <div style="flex:1"></div>
+    <span class="eval-meta" id="evalMeta">加载中...</span>
+    <button class="topbar-btn" onclick="runEval()" title="运行完整50条评估（约15-20分钟）" id="runEvalBtn">▶️ 生成评估</button>
+    <button class="topbar-btn" onclick="loadData()" title="重新读取评估结果">🔄 刷新</button>
+  </div>
+
+  <div class="content">
+    <div class="container" id="dashboard">
+      <div class="loading">正在加载评估数据...</div>
+    </div>
+  </div>
+</main>
+
+<div id="toast-container"></div>
+
+<script src="/static/js/common.js"></script>
+<script>
+let charts = {};
+let evalPollTimer = null;
+
+function setEvalButtons(disabled, text, opacity) {
+  const btns = [document.getElementById('runEvalBtn'), document.getElementById('sidebarRunEvalBtn')];
+  btns.forEach(btn => {
+    if (!btn) return;
+    btn.disabled = disabled;
+    btn.textContent = text;
+    btn.style.opacity = opacity;
+  });
+}
+
+async function runEval() {
+  const confirmed = confirm('将运行完整 50 条评估，约 15-20 分钟。\n\n运行期间页面会自动轮询进度，完成后自动刷新仪表盘。\n\n确定开始吗？');
+  if (!confirmed) return;
+  setEvalButtons(true, '⏳ 评估中...', '0.6');
+  try {
+    const resp = await fetch('/api/eval/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit: 0, use_judge: false })
+    });
+    const json = await resp.json();
+    if (json.ok && json.started) {
+      alert('评估已启动！\n\n' + json.message + '\n\n页面会自动轮询进度，完成后自动刷新。');
+      startEvalPolling();
+    } else {
+      alert('启动失败：' + (json.message || '未知错误'));
+      setEvalButtons(false, '▶️ 生成评估', '1');
+    }
+  } catch (e) {
+    alert('启动评估失败：' + e.message);
+    setEvalButtons(false, '▶️ 生成评估', '1');
+  }
+}
+
+function startEvalPolling() {
+  if (evalPollTimer) clearInterval(evalPollTimer);
+  evalPollTimer = setInterval(pollEvalStatus, 3000);
+  pollEvalStatus(); // 立即执行一次
+}
+
+async function pollEvalStatus() {
+  try {
+    const resp = await fetch('/api/eval/status');
+    const json = await resp.json();
+    const meta = document.getElementById('evalMeta');
+    if (json.running) {
+      if (meta) meta.textContent = `⏳ ${json.stage} | ${json.percent}% | 已用 ${json.elapsed}s`;
+      setEvalButtons(true, `⏳ ${json.percent}%`, '0.6');
+    } else {
+      if (evalPollTimer) { clearInterval(evalPollTimer); evalPollTimer = null; }
+      setEvalButtons(false, '▶️ 生成评估', '1');
+      if (json.error) {
+        if (meta) meta.textContent = `❌ 评估出错: ${json.error}`;
+        alert('评估出错：' + json.error);
+      } else {
+        if (meta) meta.textContent = `✅ 评估完成 | ${json.stage}`;
+        // 评估完成后自动刷新仪表盘
+        setTimeout(() => { loadData(); }, 1000);
+      }
+    }
+  } catch (e) {
+    console.error('轮询评估状态失败:', e);
+  }
+}
+
+async function loadData() {
+  const dashboard = document.getElementById('dashboard');
+  dashboard.innerHTML = '<div class="loading">正在加载评估数据...</div>';
+
+  try {
+    const resp = await fetch('/api/eval/results');
+    const json = await resp.json();
+    if (!json.ok) {
+      dashboard.innerHTML = `<div class="error-box">
+        <h3>⚠️ ${json.error}</h3>
+        <p style="margin-top:8px;font-size:13px;">请先运行 <code>python tests/agent_eval.py</code> 生成评估结果</p>
+      </div>`;
+      return;
+    }
+    renderDashboard(json.data);
+  } catch (e) {
+    dashboard.innerHTML = `<div class="error-box"><h3>❌ 加载失败</h3><p>${e.message}</p></div>`;
+  }
+}
+
+function renderDashboard(data) {
+  const s = data.summary;
+  const cases = data.cases || data.rows || [];
+  const dashboard = document.getElementById('dashboard');
+
+  // 元信息
+  document.getElementById('evalMeta').innerHTML =
+    `模式: ${data.mode || 'graph'} | 用例: ${s.total} | 评估: ${s.evaluated} | 跳过: ${s.skipped}`;
+
+  // 核心指标卡片
+  const metrics = [
+    { label: '来源命中率', value: s.source_hit_rate, pct: true, color: '#667eea' },
+    { label: '回答命中率', value: s.answer_hit_rate, pct: true, color: '#52c41a' },
+    { label: '领域判断准确率', value: s.domain_match_rate, pct: true, color: '#faad14' },
+    { label: '工具判断准确率', value: s.need_tool_match_rate, pct: true, color: '#13c2c2' },
+    { label: '平均延迟', value: (s.avg_latency_ms / 1000).toFixed(1), unit: 's', color: '#722ed1' },
+    { label: '平均 Token', value: Math.round(s.avg_total_tokens), unit: '', color: '#eb2f96' },
+    { label: 'LLM 总调用', value: s.total_llm_calls, unit: '次', color: '#f5222d' },
+    { label: '平均轮次', value: s.avg_rounds, unit: '轮', color: '#fa8c16' },
+  ];
+
+  let html = '<div class="metrics-grid">';
+  metrics.forEach(m => {
+    const isNull = m.value === null || m.value === undefined;
+    const val = isNull ? 'N/A' : (m.pct ? (m.value * 100).toFixed(1) + '%' : m.value);
+    const barWidth = (m.pct && !isNull) ? (m.value * 100) + '%' : '0%';
+    html += `<div class="metric-card">
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-value">${val}<span class="unit">${m.unit || ''}</span></div>
+      ${m.pct && !isNull ? `<div class="metric-bar"><div class="metric-bar-fill" style="width:${barWidth};background:${m.color}"></div></div>` : ''}
+    </div>`;
+  });
+  html += '</div>';
+
+  // 图表区域
+  html += `
+    <div class="section-title">📈 指标对比与趋势</div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-title">按领域分类指标对比</div>
+        <div class="chart-container" id="chartByKind"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">核心指标雷达图</div>
+        <div class="chart-container" id="chartRadar"></div>
+      </div>
+    </div>
+  `;
+
+  // Tool Agent 混淆矩阵
+  const cm = s.tool_confusion_matrix;
+  if (cm) {
+    const precision = (cm.tp + cm.fp) > 0 ? (cm.tp / (cm.tp + cm.fp) * 100).toFixed(1) : 'N/A';
+    const recall = (cm.tp + cm.fn) > 0 ? (cm.tp / (cm.tp + cm.fn) * 100).toFixed(1) : 'N/A';
+    const fpr = (cm.fp + cm.tn) > 0 ? (cm.fp / (cm.fp + cm.tn) * 100).toFixed(1) : 'N/A';
+    html += `
+      <div class="section-title">🔧 Tool Agent 混淆矩阵</div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-title">混淆矩阵（TP/FP/FN/TN）</div>
+          <div class="confusion-matrix" style="margin-top:20px;">
+            <div class="cm-cell"></div>
+            <div class="cm-cell cm-header">预测需要工具</div>
+            <div class="cm-cell cm-header">预测不需要</div>
+            <div class="cm-cell cm-label">实际需要</div>
+            <div class="cm-cell cm-tp"><span class="cm-value">${cm.tp}</span><span class="cm-desc">TP 真阳性</span></div>
+            <div class="cm-cell cm-fn"><span class="cm-value">${cm.fn}</span><span class="cm-desc">FN 假阴性</span></div>
+            <div class="cm-cell cm-label">实际不需要</div>
+            <div class="cm-cell cm-fp"><span class="cm-value">${cm.fp}</span><span class="cm-desc">FP 假阳性</span></div>
+            <div class="cm-cell cm-tn"><span class="cm-value">${cm.tn}</span><span class="cm-desc">TN 真阴性</span></div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">工具调用质量指标</div>
+          <div class="chart-container" id="chartToolQuality"></div>
+          <div style="text-align:center;margin-top:12px;font-size:13px;color:#666;">
+            精确率: <b>${precision}%</b> | 召回率: <b>${recall}%</b> | 假阳性率: <b>${fpr}%</b>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // 失败案例
+  const failures = cases.filter(c => {
+    if (c.skipped) return false;
+    const hitFail = c.expected_source && !c.hit_source;
+    const ansFail = c.expected_contains && !c.contains;
+    const domFail = c.domain_match === false;
+    return hitFail || ansFail || domFail;
+  });
+
+  html += `<div class="section-title">❌ 失败案例详情（${failures.length} 条）</div>`;
+  html += '<div class="chart-card full"><div class="failures-list">';
+  if (failures.length === 0) {
+    html += '<div style="text-align:center;padding:40px;color:#52c41a;font-size:16px;">🎉 全部通过，无失败案例！</div>';
+  } else {
+    failures.forEach(f => {
+      let reasons = [];
+      if (f.expected_source && !f.hit_source) reasons.push(`来源未命中：预期 ${f.expected_source}，实际 top1=${f.top1 || '无'}`);
+      if (f.expected_contains && !f.contains) reasons.push(`回答未包含关键词：${f.expected_contains}`);
+      if (f.domain_match === false) reasons.push(`领域判断错误：预期 ${f.expected_domain}，实际 ${f.actual_domain}`);
+      html += `<div class="failure-item">
+        <span class="failure-id">${f.id}</span>
+        <span class="failure-q">${f.question || ''}</span>
+        ${reasons.map(r => `<div class="failure-reason">• ${r}</div>`).join('')}
+      </div>`;
+    });
+  }
+  html += '</div></div>';
+
+  dashboard.innerHTML = html;
+
+  // 初始化图表
+  setTimeout(() => initCharts(s, cases), 100);
+}
+
+function initCharts(s, cases) {
+  // 按领域分类对比（过滤掉无来源预期的 kind）
+  const byKind = s.by_kind || {};
+  const kinds = Object.keys(byKind).filter(k => byKind[k].source_hit_rate !== null && byKind[k].source_hit_rate !== undefined);
+  const chartByKind = echarts.init(document.getElementById('chartByKind'));
+  chartByKind.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['来源命中率', '回答命中率', '领域准确率'], bottom: 0 },
+    grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+    xAxis: { type: 'category', data: kinds, axisLabel: { fontSize: 11 } },
+    yAxis: { type: 'value', max: 1, axisLabel: { formatter: v => (v*100).toFixed(0)+'%' } },
+    series: [
+      { name: '来源命中率', type: 'bar', data: kinds.map(k => byKind[k].source_hit_rate), itemStyle: { color: '#667eea' } },
+      { name: '回答命中率', type: 'bar', data: kinds.map(k => byKind[k].answer_hit_rate), itemStyle: { color: '#52c41a' } },
+      { name: '领域准确率', type: 'bar', data: kinds.map(k => byKind[k].domain_match_rate || 0), itemStyle: { color: '#faad14' } },
+    ]
+  });
+  charts.byKind = chartByKind;
+
+  // 雷达图
+  const chartRadar = echarts.init(document.getElementById('chartRadar'));
+  chartRadar.setOption({
+    tooltip: {},
+    radar: {
+      indicator: [
+        { name: '来源命中', max: 1 },
+        { name: '回答命中', max: 1 },
+        { name: '领域判断', max: 1 },
+        { name: '工具判断', max: 1 },
+        { name: '无禁止来源', max: 1 },
+      ],
+      radius: '65%',
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        value: [s.source_hit_rate, s.answer_hit_rate, s.domain_match_rate || 0, s.need_tool_match_rate || 0, 1 - s.forbidden_source_rate],
+        name: '当前评估',
+        areaStyle: { color: 'rgba(102,126,234,0.3)' },
+        lineStyle: { color: '#667eea' },
+        itemStyle: { color: '#667eea' },
+      }]
+    }]
+  });
+  charts.radar = chartRadar;
+
+  // 工具调用质量
+  const cm = s.tool_confusion_matrix;
+  if (cm && document.getElementById('chartToolQuality')) {
+    const chartTool = echarts.init(document.getElementById('chartToolQuality'));
+    const precision = (cm.tp + cm.fp) > 0 ? cm.tp / (cm.tp + cm.fp) : 0;
+    const recall = (cm.tp + cm.fn) > 0 ? cm.tp / (cm.tp + cm.fn) : 0;
+    const fpr = (cm.fp + cm.tn) > 0 ? cm.fp / (cm.fp + cm.tn) : 0;
+    const accuracy = (cm.tp + cm.tn) / (cm.tp + cm.fp + cm.fn + cm.tn);
+    chartTool.setOption({
+      tooltip: { trigger: 'axis', formatter: p => p[0].name + ': ' + (p[0].value*100).toFixed(1) + '%' },
+      grid: { left: '3%', right: '4%', bottom: '10%', top: '10%', containLabel: true },
+      xAxis: { type: 'category', data: ['精确率', '召回率', '准确率', '假阳性率'], axisLabel: { fontSize: 11 } },
+      yAxis: { type: 'value', max: 1, axisLabel: { formatter: v => (v*100).toFixed(0)+'%' } },
+      series: [{
+        type: 'bar',
+        data: [
+          { value: precision, itemStyle: { color: '#52c41a' } },
+          { value: recall, itemStyle: { color: '#13c2c2' } },
+          { value: accuracy, itemStyle: { color: '#667eea' } },
+          { value: fpr, itemStyle: { color: '#f5222d' } },
+        ],
+        label: { show: true, position: 'top', formatter: p => (p.value*100).toFixed(0)+'%', fontSize: 11 },
+        barWidth: '40%',
+      }]
+    });
+    charts.tool = chartTool;
+  }
+
+  // 响应式
+  window.addEventListener('resize', () => {
+    Object.values(charts).forEach(c => c.resize());
+  });
+}
+
+loadData();
+</script>
+</body>
+</html>

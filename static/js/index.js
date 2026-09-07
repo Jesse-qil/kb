@@ -144,9 +144,11 @@ function handleStreamEvent(ev, b) {
     clearStatusChips(b);
     const finalText = ev.answer || b.text.textContent;
     b.text.innerHTML = renderMarkdown(finalText);
+    window._lastAnswer = finalText;
+    window._lastSources = ev.sources || [];
     attachCopyButtons();
     chatEl.scrollTop = chatEl.scrollHeight;
-    if (ev.sources && ev.sources.length) renderSources(ev.sources);
+    if (ev.sources && ev.sources.length) renderSources(ev.sources, finalText);
   } else if (ev.type === "error") {
     hideCursor(b);
     b.text.textContent += "\n\n⚠️ " + (ev.content || "未知错误");
@@ -369,17 +371,21 @@ async function reviewReject(btn) {
 }
 
 /* ===== 参考来源 ===== */
-function renderSources(sources) {
+function renderSources(sources, answerText) {
   const welcome = document.querySelector(".welcome");
   if (welcome) welcome.remove();
   const card = document.createElement("div");
   card.className = "src-card";
+  card.dataset.answer = answerText || window._lastAnswer || "";
+  card.dataset.sources = JSON.stringify(sources || []);
   const groups = {};
   sources.forEach(s => { (groups[s.source] = groups[s.source] || []).push(s); });
   const files = Object.keys(groups);
   const head = document.createElement("div");
   head.className = "src-head";
-  head.innerHTML = "📎 参考来源（" + files.length + " 篇）<span class='src-arrow' style='color:#6b7a90'>▶</span>";
+  head.innerHTML = "📎 参考来源（" + files.length + " 篇）" +
+    '<button class="src-export-btn" onclick="exportCurrentAnswer(this)" title="导出当前回答+来源为 Markdown">⬇ 导出</button>' +
+    "<span class='src-arrow' style='color:#6b7a90'>▶</span>";
   head.onclick = () => {
     const body = card.querySelector(".src-body");
     const arrow = head.querySelector(".src-arrow");
@@ -422,6 +428,37 @@ function renderSources(sources) {
   card.appendChild(body);
   chatEl.appendChild(card);
   chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+/* ===== 导出当前回答+来源 ===== */
+function exportCurrentAnswer(btn) {
+  const card = btn ? btn.closest(".src-card") : null;
+  const answer = card ? (card.dataset.answer || "") : (window._lastAnswer || "");
+  const sources = card ? JSON.parse(card.dataset.sources || "[]") : (window._lastSources || []);
+  let md = "# 知识库问答导出\n\n";
+  md += "> 导出时间：" + new Date().toLocaleString() + "\n\n---\n\n";
+  md += "## 回答\n\n" + answer + "\n\n";
+  if (sources.length) {
+    md += "## 参考来源\n\n";
+    const groups = {};
+    sources.forEach(s => { (groups[s.source] = groups[s.source] || []).push(s); });
+    Object.keys(groups).forEach(fname => {
+      md += "### 📄 " + fname + "\n";
+      groups[fname].forEach(s => {
+        const h = (s.heading || "").replace(/^#+\s*/, "").slice(0, 50);
+        md += "- " + (h || "(片段)") + " — 相似度 " + s.score.toFixed(3) + "\n";
+      });
+      md += "\n";
+    });
+  }
+  const blob = new Blob([md], {type: "text/markdown;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "kb_answer_" + Date.now() + ".md";
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("已导出回答和来源", "success");
 }
 
 /* ===== 入库进度 ===== */
@@ -520,8 +557,29 @@ async function newSession() {
 async function switchSession(sid, title) {
   setCurSession(sid, title);
   resetChatArea();
-  addMsg("已切换到会话「" + (title || "新会话").slice(0, 15) + "」，开始提问吧。", "bot");
+  window._lastAnswer = "";
+  window._lastSources = [];
   closeSidebar();
+  try {
+    const r = await fetch("/api/sessions/" + encodeURIComponent(sid) + "/history");
+    const d = await r.json();
+    const msgs = d.messages || [];
+    if (msgs.length) {
+      const welcome = document.querySelector(".welcome");
+      if (welcome) welcome.remove();
+      msgs.forEach(m => {
+        const role = m.role === "user" ? "user" : "bot";
+        addMsg(m.content || "", role);
+        if (m.sources && m.sources.length) renderSources(m.sources, m.content || "");
+      });
+      chatEl.scrollTop = chatEl.scrollHeight;
+      toast("已加载 " + msgs.length + " 条历史消息", "success");
+    } else {
+      addMsg("已切换到会话「" + (title || "新会话").slice(0, 15) + "」，开始提问吧。", "bot");
+    }
+  } catch (e) {
+    addMsg("已切换到会话「" + (title || "新会话").slice(0, 15) + "」，开始提问吧。", "bot");
+  }
 }
 function resetChatArea() {
   document.getElementById("chat").innerHTML =

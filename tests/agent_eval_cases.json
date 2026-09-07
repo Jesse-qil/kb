@@ -1,0 +1,569 @@
+[
+  {
+    "id": "overview_01",
+    "question": "知识库里有什么内容？",
+    "kind": "overview",
+    "expect_overview": true,
+    "expected_domain": "默认",
+    "expected_contains": "我的知识库目前包含",
+    "requires_real_model": true
+  },
+  {
+    "id": "overview_02",
+    "question": "库里包含哪些主题分类？",
+    "kind": "overview",
+    "expect_overview": true,
+    "expected_domain": "默认",
+    "expected_contains": "AI-Agent",
+    "requires_real_model": true
+  },
+  {
+    "id": "rag_python_01",
+    "question": "装饰器怎么写",
+    "kind": "rag",
+    "topic": "Python基础",
+    "expected_domain": "Python基础",
+    "expected_source": "Python基础/示例-装饰器.md",
+    "expected_contains": "装饰器"
+  },
+  {
+    "id": "rag_python_02",
+    "question": "list 和 tuple 有什么区别",
+    "kind": "rag",
+    "topic": "Python基础",
+    "expected_domain": "Python基础",
+    "expected_contains": "list",
+    "expected_sources_any": [
+      "Python基础/W02-数据结构.md",
+      "Python基础/W03-函数与模块.md"
+    ]
+  },
+  {
+    "id": "rag_python_03",
+    "question": "生成器和迭代器的区别",
+    "kind": "rag",
+    "topic": "Python基础",
+    "expected_domain": "Python基础",
+    "expected_contains": "生成器",
+    "expected_sources_any": [
+      "Python基础/W06-迭代器与生成器.md",
+      "Python基础/W03-函数与模块.md"
+    ]
+  },
+  {
+    "id": "rag_python_04",
+    "question": "Python 异常处理 try except 怎么用",
+    "kind": "rag",
+    "topic": "Python基础",
+    "expected_domain": "Python基础",
+    "expected_contains": "异常",
+    "expected_sources_any": [
+      "Python基础/W03-函数与模块.md",
+      "Python基础/W05-装饰器与上下文.md"
+    ]
+  },
+  {
+    "id": "rag_agent_01",
+    "question": "什么是 AI Agent",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "expected_contains": "Agent"
+  },
+  {
+    "id": "rag_agent_02",
+    "question": "LangGraph 多智能体怎么做",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_contains": "LangGraph",
+    "expected_sources_any": [
+      "AI-Agent/W03-LangGraph入门.md",
+      "AI-Agent/W04-LangGraph进阶.md",
+      "AI-Agent/W07-多Agent协作.md"
+    ]
+  },
+  {
+    "id": "rag_agent_03",
+    "question": "ReAct 框架是什么",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "forbid_sources_any": [
+      "学习路线/11-GitHub项目精选-React生态.md"
+    ],
+    "expected_contains": "ReAct"
+  },
+  {
+    "id": "rag_agent_04",
+    "question": "RAG 的完整流程是什么",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_contains": "检索",
+    "expected_sources_any": [
+      "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+      "学习路线/W04-RAG完整实现.md",
+      "AI-Agent/W01-Agent全景与5模式.md"
+    ]
+  },
+  {
+    "id": "rag_agent_05",
+    "question": "Agent 工具调用怎么实现",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_contains": "工具",
+    "expected_sources_any": [
+      "AI-Agent/W03-Function-Calling与Tool-Use.md",
+      "AI-Agent/W02-手写Agent不用框架.md",
+      "AI-Agent/08-Agent总纲.md",
+      "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf"
+    ]
+  },
+  {
+    "id": "rag_agent_06",
+    "question": "Agent 的记忆系统怎么做",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_contains": "记忆",
+    "expected_sources_any": [
+      "AI-Agent/W01-Agent全景与5模式.md",
+      "AI-Agent/08-Agent总纲.md",
+      "AI-Agent/W07-多Agent协作.md",
+      "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf"
+    ]
+  },
+  {
+    "id": "rag_study_01",
+    "question": "如何高效学习编程",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "学习",
+    "expected_sources_any": [
+      "学习路线/00-如何高效学习编程.md",
+      "学习路线/06-费曼学习法与笔记系统.md",
+      "学习路线/学习路线全景图.md"
+    ]
+  },
+  {
+    "id": "rag_study_02",
+    "question": "Python 学习路线怎么规划",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_source": "学习路线/01-Python总纲.md",
+    "expected_contains": "Python"
+  },
+  {
+    "id": "rag_study_03",
+    "question": "后端开发需要学什么技术栈",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "后端",
+    "expected_sources_any": [
+      "学习路线/05-后端总纲.md",
+      "学习路线/02-架构设计与技术选型.md",
+      "学习路线/W02-FastAPI入门.md",
+      "学习路线/09-GitHub项目精选-后端实战.md"
+    ]
+  },
+  {
+    "id": "rag_study_04",
+    "question": "Git 入门教程",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_source": "学习路线/02-Git与GitHub入门.md",
+    "expected_contains": "Git"
+  },
+  {
+    "id": "rag_study_05",
+    "question": "HTML5 与可访问性",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_source": "学习路线/W01-HTML5与可访问性.md",
+    "expected_contains": "HTML"
+  },
+  {
+    "id": "rag_db_01",
+    "question": "SQL 和 PostgreSQL 基础",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_source": "学习路线/W01-SQL与PostgreSQL.md",
+    "expected_contains": "SQL"
+  },
+  {
+    "id": "rag_db_02",
+    "question": "数据库索引原理是什么",
+    "kind": "rag",
+    "topic": "数据库",
+    "expected_domain": "数据库",
+    "expected_contains": "索引",
+    "expected_sources_any": [
+      "数据库/W02-索引事务锁.md",
+      "学习路线/W01-SQL与PostgreSQL.md",
+      "数据库/W05-向量数据库与全文搜索.md"
+    ]
+  },
+  {
+    "id": "rag_env_01",
+    "question": "VSCode 怎么配置和使用",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_source": "学习路线/04-VSCode与AI辅助编程.md",
+    "expected_contains": "VSCode"
+  },
+  {
+    "id": "rag_confusion_01",
+    "question": "React 框架入门",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "forbid_sources_any": [
+      "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf"
+    ],
+    "expected_contains": "React",
+    "expected_sources_any": [
+      "学习路线/04-React总纲.md",
+      "学习路线/W01-React入门与JSX.md",
+      "学习路线/W02-Hooks全集.md"
+    ]
+  },
+  {
+    "id": "tool_01",
+    "question": "2 的 10 次方是多少",
+    "kind": "tool",
+    "expected_need_tool": true,
+    "expected_tool_result_contains": "1024",
+    "requires_real_model": true
+  },
+  {
+    "id": "tool_02",
+    "question": "计算 1234 乘以 5678 等于多少",
+    "kind": "tool",
+    "expected_need_tool": true,
+    "expected_tool_result_contains": "7006652",
+    "requires_real_model": true
+  },
+  {
+    "id": "tool_03",
+    "question": "斐波那契数列第 20 项是多少",
+    "kind": "tool",
+    "expected_need_tool": true,
+    "expected_tool_result_contains": "6765",
+    "requires_real_model": true
+  },
+  {
+    "id": "tool_04",
+    "question": "Python 中 list 怎么排序",
+    "kind": "rag",
+    "topic": "Python基础",
+    "expected_domain": "Python基础",
+    "expected_need_tool": false,
+    "expected_contains": "排序",
+    "expected_sources_any": [
+      "Python基础/W02-数据结构.md",
+      "Python基础/W03-函数与模块.md"
+    ]
+  },
+  {
+    "id": "tool_05",
+    "question": "什么是装饰器",
+    "kind": "rag",
+    "topic": "Python基础",
+    "expected_domain": "Python基础",
+    "expected_need_tool": false,
+    "expected_contains": "装饰器",
+    "expected_sources_any": [
+      "Python基础/W05-装饰器与上下文.md",
+      "Python基础/示例-装饰器.md",
+      "Python基础/W03-函数与模块.md"
+    ]
+  },
+  {
+    "id": "web_01",
+    "question": "今天北京时间几点",
+    "kind": "web",
+    "expected_from_web": true,
+    "requires_real_model": true
+  },
+  {
+    "id": "web_02",
+    "question": "今天天气怎么样",
+    "kind": "web",
+    "expected_from_web": true,
+    "requires_real_model": true
+  },
+  {
+    "id": "rag_k8s_01",
+    "question": "K8s 监控怎么做",
+    "kind": "rag",
+    "topic": "K8s与监控",
+    "expected_domain": "K8s与监控",
+    "expected_contains": "监控",
+    "expected_sources_any": [
+      "K8s与监控/W06-K8s与监控.md"
+    ]
+  },
+  {
+    "id": "rag_agent_07",
+    "question": "Agent 的 5 种模式是什么",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_source": "AI-Agent/W01-Agent全景与5模式.md",
+    "expected_contains": "模式",
+    "expected_sources_any": [
+      "AI-Agent/W01-Agent全景与5模式.md",
+      "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+      "AI-Agent/08-Agent总纲.md"
+    ]
+  },
+  {
+    "id": "rag_python_05",
+    "question": "Python 闭包是什么",
+    "kind": "rag",
+    "topic": "Python基础",
+    "expected_domain": "Python基础",
+    "expected_contains": "闭包",
+    "expected_sources_any": [
+      "Python基础/W03-函数与模块.md",
+      "Python基础/W05-装饰器与上下文.md",
+      "学习路线/W03-闭包与作用域.md"
+    ]
+  },
+  {
+    "id": "rag_python_06",
+    "question": "Python 装饰器和闭包有什么区别",
+    "kind": "rag",
+    "topic": "Python基础",
+    "expected_domain": "Python基础",
+    "expected_contains": "装饰器",
+    "expected_sources_any": [
+      "Python基础/W05-装饰器与上下文.md",
+      "Python基础/W03-函数与模块.md",
+      "Python基础/示例-装饰器.md"
+    ]
+  },
+  {
+    "id": "rag_agent_08",
+    "question": "LangChain 和 LangGraph 的区别是什么",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_contains": "LangGraph",
+    "expected_sources_any": [
+      "AI-Agent/W03-LangGraph入门.md",
+      "AI-Agent/W04-LangGraph进阶.md",
+      "AI-Agent/08-Agent总纲.md"
+    ]
+  },
+  {
+    "id": "rag_agent_09",
+    "question": "RAG 和模型微调有什么区别",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_contains": "RAG",
+    "expected_sources_any": [
+      "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+      "学习路线/W04-RAG完整实现.md",
+      "AI-Agent/W01-Agent全景与5模式.md"
+    ]
+  },
+  {
+    "id": "rag_agent_10",
+    "question": "Agent 的记忆类型有哪些",
+    "kind": "rag",
+    "topic": "AI-Agent",
+    "expected_domain": "AI-Agent",
+    "expected_contains": "记忆",
+    "expected_sources_any": [
+      "AI-Agent/W01-Agent全景与5模式.md",
+      "AI-Agent/08-Agent总纲.md",
+      "AI-Agent/W07-多Agent协作.md"
+    ]
+  },
+  {
+    "id": "rag_study_06",
+    "question": "前端开发学习路线怎么规划",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "前端",
+    "expected_sources_any": [
+      "学习路线/03-HTML-CSS总纲.md",
+      "学习路线/02-JavaScript总纲.md",
+      "学习路线/04-React总纲.md",
+      "学习路线/学习路线全景图.md",
+      "学习路线/W10-V8引擎与性能优化.md"
+    ]
+  },
+  {
+    "id": "rag_study_07",
+    "question": "后端开发需要学哪些技术",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "后端",
+    "expected_sources_any": [
+      "学习路线/05-后端总纲.md",
+      "学习路线/02-架构设计与技术选型.md",
+      "学习路线/W02-FastAPI入门.md",
+      "学习路线/09-GitHub项目精选-后端实战.md"
+    ]
+  },
+  {
+    "id": "rag_study_08",
+    "question": "全栈开发者需要掌握什么",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "全栈",
+    "expected_sources_any": [
+      "学习路线/学习路线全景图.md",
+      "学习路线/05-后端总纲.md",
+      "学习路线/04-React总纲.md"
+    ]
+  },
+  {
+    "id": "rag_study_09",
+    "question": "Docker 入门教程",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "Docker",
+    "expected_sources_any": [
+      "学习路线/W08-Docker部署.md",
+      "环境配置/01-环境配置完全指南.md"
+    ]
+  },
+  {
+    "id": "rag_study_10",
+    "question": "计算机网络基础需要学什么",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "网络",
+    "expected_sources_any": [
+      "学习路线/W01-HTTP与REST.md",
+      "AI-Agent/W01-LLM全景与API.md"
+    ]
+  },
+  {
+    "id": "rag_db_03",
+    "question": "Redis 和 MySQL 的区别是什么",
+    "kind": "rag",
+    "topic": "数据库",
+    "expected_domain": "数据库",
+    "expected_contains": "Redis",
+    "expected_sources_any": [
+      "数据库/W03-Redis全集.md",
+      "数据库/W02-索引事务锁.md",
+      "学习路线/W01-SQL与PostgreSQL.md"
+    ]
+  },
+  {
+    "id": "rag_db_04",
+    "question": "数据库事务 ACID 是什么",
+    "kind": "rag",
+    "topic": "数据库",
+    "expected_domain": "数据库",
+    "expected_contains": "ACID",
+    "expected_sources_any": [
+      "数据库/W02-索引事务锁.md",
+      "学习路线/W01-SQL与PostgreSQL.md"
+    ]
+  },
+  {
+    "id": "rag_confusion_02",
+    "question": "Java 和 JavaScript 有什么区别",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "Java",
+    "expected_sources_any": [
+      "学习路线/02-JavaScript总纲.md",
+      "学习路线/W01-语法基础.md",
+      "学习路线/学习路线全景图.md"
+    ]
+  },
+  {
+    "id": "tool_06",
+    "question": "计算 100 的阶乘是多少",
+    "kind": "tool",
+    "expected_need_tool": true,
+    "expected_tool_result_contains": "9332621544",
+    "requires_real_model": true
+  },
+  {
+    "id": "tool_07",
+    "question": "什么是列表推导式",
+    "kind": "rag",
+    "topic": "Python基础",
+    "expected_domain": "Python基础",
+    "expected_need_tool": false,
+    "expected_contains": "列表推导",
+    "expected_sources_any": [
+      "Python基础/W02-数据结构.md",
+      "Python基础/W03-函数与模块.md"
+    ]
+  },
+  {
+    "id": "tool_08",
+    "question": "生成 100 以内的所有素数",
+    "kind": "tool",
+    "expected_need_tool": true,
+    "expected_tool_result_contains": "2",
+    "requires_real_model": true
+  },
+  {
+    "id": "overview_03",
+    "question": "库里一共有多少篇文档",
+    "kind": "overview",
+    "expect_overview": true,
+    "expected_domain": "默认",
+    "expected_contains": "知识库",
+    "requires_real_model": true
+  },
+  {
+    "id": "web_03",
+    "question": "现在北京时间是几点",
+    "kind": "web",
+    "expected_from_web": true,
+    "requires_real_model": true
+  },
+  {
+    "id": "rag_env_02",
+    "question": "Git 常用命令有哪些",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "Git",
+    "expected_sources_any": [
+      "学习路线/02-Git与GitHub入门.md",
+      "学习路线/11-GitHub项目精选-Python.md"
+    ]
+  },
+  {
+    "id": "rag_k8s_02",
+    "question": "Kubernetes 基础概念是什么",
+    "kind": "rag",
+    "topic": "学习路线",
+    "expected_domain": "学习路线",
+    "expected_contains": "Kubernetes",
+    "expected_sources_any": [
+      "K8s与监控/W06-K8s与监控.md",
+      "学习路线/W08-Docker部署.md"
+    ]
+  }
+]

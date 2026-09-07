@@ -19,13 +19,14 @@
   <!-- 页面导航 -->
   <a class="nav-item" href="/static/index.html">💬 问答对话</a>
   <a class="nav-item active" href="/static/manage.html">🗂 知识库管理</a>
+  <a class="nav-item" href="/static/eval_dashboard.html">📊 评估仪表盘</a>
 
   <div class="sidebar-divider"></div>
 
   <div class="kb-section">
     <div class="kb-title">快捷操作</div>
-    <button class="kb-btn" onclick="loadAll()">🔄 刷新数据</button>
-    <button class="kb-btn" onclick="triggerIngest()">📥 扫描并入库新文档</button>
+    <button class="kb-btn" onclick="pickImportFiles()">📤 导入文件</button>
+    <button class="kb-btn" onclick="pickImportFolder()">📁 导入文件夹</button>
   </div>
 
   <div class="sidebar-footer">kb-v2 · 管理台</div>
@@ -38,6 +39,7 @@
   <div class="topbar">
     <button class="hamburger" onclick="toggleSidebar()">☰</button>
     <div class="topbar-title">🗂 知识库管理</div>
+    <button class="topbar-btn" onclick="exportSnapshot()" title="导出知识库快照（chroma+台账+配置）">⬇ 导出快照</button>
     <button class="topbar-btn" onclick="loadAll()">🔄 刷新</button>
   </div>
 
@@ -69,20 +71,120 @@
         <h3>📄 文档台账</h3>
         <div class="doc-toolbar">
           <input class="doc-search" id="docSearch" placeholder="按文件名 / 标签搜索…（回车确认）">
+          <button class="toolbar-btn" onclick="exportSelected()" id="exportSelectedBtn" disabled title="勾选文档后批量导出为 zip">⬇ 批量导出</button>
+          <span class="select-count" id="selectCount">已选 0 篇</span>
         </div>
         <table class="doc-table">
           <thead>
-            <tr><th style="width:38%">文件名</th><th style="width:14%">领域</th><th>标签</th><th style="width:14%">更新时间</th></tr>
+            <tr>
+              <th style="width:5%"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
+              <th style="width:30%">文件名</th>
+              <th style="width:11%">领域</th>
+              <th>标签</th>
+              <th style="width:13%">更新时间</th>
+              <th style="width:11%">操作</th>
+            </tr>
           </thead>
-          <tbody id="docTbody"><tr><td colspan="4" class="loading">加载中…</td></tr></tbody>
+          <tbody id="docTbody"><tr><td colspan="6" class="loading">加载中…</td></tr></tbody>
         </table>
+      </div>
+
+      <!-- 标签管理 -->
+      <div class="card">
+        <h3>🏷 标签管理 <span class="card-subtitle">（共 <span id="tagTotal">0</span> 个标签，支持删除和合并）</span></h3>
+        <div class="tag-manage-toolbar">
+          <input class="doc-search" id="tagSearch" placeholder="搜索标签…" oninput="filterTags(this.value)">
+          <button class="toolbar-btn" onclick="showMergeDialog()">🔀 合并标签</button>
+        </div>
+        <div class="tag-manage-list" id="tagManageList"><div class="loading">加载中…</div></div>
       </div>
 
     </div>
   </div>
 </div>
 
+<!-- 文档预览弹窗 -->
+<div class="modal-overlay" id="previewModal" onclick="closePreview(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="previewTitle">文档预览</span>
+      <button class="modal-close" onclick="closePreview()">✕</button>
+    </div>
+    <div class="modal-body" id="previewBody"><div class="loading">加载中…</div></div>
+  </div>
+</div>
+
+<!-- 合并标签弹窗 -->
+<div class="modal-overlay" id="mergeModal" onclick="closeMergeDialog(event)">
+  <div class="modal-content modal-small" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">🔀 合并标签</span>
+      <button class="modal-close" onclick="closeMergeDialog()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">把「源标签」的内容合并到「目标标签」，然后删除源标签。</p>
+      <div class="form-group">
+        <label>源标签（将被删除）</label>
+        <input type="text" id="mergeFrom" placeholder="输入或选择源标签" list="tagDatalist">
+      </div>
+      <div class="form-group">
+        <label>目标标签（保留）</label>
+        <input type="text" id="mergeTo" placeholder="输入或选择目标标签" list="tagDatalist">
+      </div>
+      <datalist id="tagDatalist"></datalist>
+      <div class="modal-actions">
+        <button class="toolbar-btn" onclick="closeMergeDialog()">取消</button>
+        <button class="toolbar-btn primary" onclick="doMergeTag()">确认合并</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast-container"></div>
+
+<!-- 导入进度弹窗 -->
+<div class="modal-overlay" id="importModal" onclick="closeImportModal(event)">
+  <div class="modal-content modal-small" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="importModalTitle">📤 导入进度</span>
+      <button class="modal-close" onclick="closeImportModal()" title="关闭">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- 上传进度 -->
+      <div class="prog-row" id="uploadProgRow" style="display:none">
+        <div class="prog-head">
+          <span id="uploadProgStage">上传中…</span>
+          <span id="uploadProgPct">0%</span>
+        </div>
+        <div class="prog-bar-wrap"><div class="prog-bar" id="uploadProgBar" style="width:0%"></div></div>
+      </div>
+
+      <!-- 入库进度 -->
+      <div class="prog-row" id="ingestProgRow" style="display:none">
+        <div class="prog-head">
+          <span id="ingestProgStage">入库中…</span>
+          <span id="ingestProgPct">0%</span>
+        </div>
+        <div class="prog-bar-wrap"><div class="prog-bar" id="ingestProgBar" style="width:0%"></div></div>
+        <div class="prog-meta" id="ingestProgMeta"></div>
+      </div>
+
+      <!-- 导入结果 -->
+      <div class="import-results" id="importResults"></div>
+
+      <div class="modal-actions">
+        <button class="import-btn" id="forceCloseBtn" onclick="forceCloseImport()" style="display:none;background:#ff6b6b;color:#fff;">⚠️ 强制关闭</button>
+        <button class="import-btn" onclick="closeImportModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 导入文件选择器（隐藏） -->
+<input type="file" id="importFileInput" accept=".md,.docx,.pdf" multiple style="display:none" onchange="handleImportFiles(this)">
+
+<!-- 导入文件夹选择器（隐藏） -->
+<input type="file" id="importFolderInput" webkitdirectory directory multiple style="display:none" onchange="handleImportFolder(this)">
 
 <script src="/static/js/common.js"></script>
 <script src="/static/js/manage.js"></script>

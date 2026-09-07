@@ -142,3 +142,17 @@ body {
   .sidebar-mask.show { display: block; }
   .hamburger { display: block; }
 }
+
+/* ===== 页面切换动画（三页共用） =====
+   进入：body 淡入 + 轻微上移；离开：点击导航时加 .leaving（common.js 拦截） */
+body {
+  animation: pageFadeIn .3s ease;
+}
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+body.leaving {
+  opacity: 0; transform: translateY(4px);
+  transition: opacity .16s ease, transform .16s ease;
+}
