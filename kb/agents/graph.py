@@ -5,9 +5,15 @@ Planner(规划) → Retriever(检索) → Answerer(回答) → Reviewer(审查)
 import json
 from typing import TypedDict
 
-from langgraph.graph import StateGraph, START, END
 import queue
 import threading
+
+try:
+    from langgraph.graph import StateGraph, START, END
+    _HAS_LANGGRAPH = True
+except Exception:
+    StateGraph = START = END = None
+    _HAS_LANGGRAPH = False
 
 from ..storage.vector_store import query, list_contents
 from ..llm import LLMClient
@@ -210,9 +216,17 @@ def tool_agent(state:KBState)->dict:
     allowed={"execute_python","web_search_tool"}
     tools = [t for t in TOOLS if t["function"]["name"] in allowed]
 
+    # 把检索结果传给 tool_agent，让它知道知识库已经有相关内容
+    hits_text = ""
+    if state.get("hits"):
+        hits_text = "\n\n【知识库检索结果】（系统已检索到以下相关笔记，优先基于这些内容回答，不要重复调用工具查笔记）\n"
+        for i, h in enumerate(state["hits"][:3], 1):
+            src = h.get("source", "未知")
+            txt = (h.get("text", "") or "")[:150]
+            hits_text += f"{i}. 来源: {src}\n   内容: {txt}\n"
     messages=[
         {"role":"system", "content": TOOL_ASSISTANT_PROMPT},
-        {"role":"user","content": state["question"]},
+        {"role":"user","content": state["question"] + hits_text},
     ]
 
     llm = LLMClient()
@@ -308,6 +322,8 @@ def route_after_planner(state: KBState) -> str:
 
 # ---------- 7. 组装图 ----------
 def build_graph():
+    if not _HAS_LANGGRAPH:
+        raise RuntimeError("langgraph 未安装，无法构建图")
     g = StateGraph(KBState)
     g.add_node("planner", planner)
     g.add_node("overview", overview)
@@ -327,29 +343,93 @@ def build_graph():
     return g.compile()
 
 
-# ---------- 8. 对外接口 ----------
-def ask(question: str, history: str = "") -> dict:
-    result = build_graph().invoke({
+# ---------- 7.5 无 langgraph 时的顺序 fallback ----------
+def _initial_state(question: str, history: str = "") -> KBState:
+    return {
         "question": question, "topic": "", "tags": [], "queries": [],
         "hits": [], "answer": "", "review_feedback": "", "rounds": 0,
-        "from_web": False, "is_overview": False,
-        "history": history,          # 之前对话（可为空）
-    })
+        "from_web": False, "is_overview": False, "history": history,
+        "tool_result": "",
+    }
+
+
+def _run_sequential(question: str, history: str = "", emit_status=None) -> dict:
+    state = _initial_state(question, history=history)
+    if emit_status:
+        emit_status("规划问题")
+    state.update(planner(state))
+    if route_after_planner(state) == "overview":
+        if emit_status:
+            emit_status("整理知识库目录")
+        state.update(overview(state))
+        return state
+    if emit_status:
+        emit_status("检索笔记")
+    state.update(retriever(state))
+    if emit_status:
+        emit_status("调用工具")
+    state.update(tool_agent(state))
+    while True:
+        if emit_status:
+            emit_status(f"第{state['rounds'] + 1}轮回答" if state["rounds"] else "生成回答")
+        state.update(answerer(state))
+        if emit_status:
+            emit_status("审查回答")
+        state.update(reviewer(state))
+        if should_retry(state) == "accept":
+            break
+    return state
+
+
+# ---------- 8. 结果整理 ----------
+def _collect_sources(result: dict) -> list[dict]:
     threshold = recall_cfg()["score_threshold"]
-    if result.get("is_overview"):
-        return {"answer": result["answer"], "sources": [], "topic": result["topic"]}
-    if result["from_web"]:
-        sources = [{"source": "网络搜索", "heading": "", "score": 0}]
-    elif result["hits"] and max(h["score"] for h in result["hits"]) >= threshold:
+    if result.get("from_web"):
+        return [{"source": "网络搜索", "heading": "", "score": 0}]
+    hits = result.get("hits") or []
+    if hits and max(h["score"] for h in hits) >= threshold:
         seen, sources = set(), []
-        for h in sorted(result["hits"], key=lambda x: -x["score"]):
+        for h in sorted(hits, key=lambda x: -x["score"]):
             key = (h["source"], h["text"][:20])
-            if key not in seen:
-                seen.add(key)
-                sources.append({"source": h["source"], "heading": h.get("heading", ""), "score": h["score"]})
+            if key in seen:
+                continue
+            seen.add(key)
+            sources.append({"source": h["source"], "heading": h.get("heading", ""), "score": h["score"]})
+        return sources
+    return []
+
+
+def run(question: str, history: str = "") -> dict:
+    """执行完整多 Agent 流程，返回完整状态与来源。
+
+    供评测、调试、API 复用；ask() 只保留对外简版结果。
+    """
+    if _HAS_LANGGRAPH:
+        result = build_graph().invoke(_initial_state(question, history=history))
     else:
-        sources = []
-    return {"answer": result["answer"], "sources": sources, "topic": result["topic"]}
+        result = _run_sequential(question, history=history)
+    return {
+        "question": question,
+        "answer": result.get("answer", ""),
+        "sources": _collect_sources(result),
+        "topic": result.get("topic", ""),
+        "hits": result.get("hits", []),
+        "from_web": result.get("from_web", False),
+        "is_overview": result.get("is_overview", False),
+        "rounds": result.get("rounds", 0),
+        "review_feedback": result.get("review_feedback", ""),
+        "tool_result": result.get("tool_result", ""),
+        "queries": result.get("queries", []),
+        "tags": result.get("tags", []),
+    }
+
+
+# ---------- 8. 对外接口 ----------
+def ask(question: str, history: str = "") -> dict:
+    result = run(question, history=history)
+    if result["is_overview"]:
+        return {"answer": result["answer"], "sources": [], "topic": result["topic"]}
+    return {"answer": result["answer"], "sources": result["sources"], "topic": result["topic"]}
 
 
 
@@ -369,35 +449,40 @@ def ask_stream(question: str, history: str = ""):
         q.put(ev)
 
     def runner() -> None:
-        graph = build_graph()
         last_answer, hits, from_web, topic = "", [], False, ""
         try:
             _stream_local.cb = lambda text: emit({"type": "delta", "content": text})
-            state = {
-                "question": question, "topic": "", "tags": [], "queries": [],
-                "hits": [], "answer": "", "review_feedback": "", "rounds": 0,
-                "from_web": False, "is_overview": False, "history": history,
-            }
-            stage_names = {
-                "planner": "规划问题", "overview": "整理知识库目录",
-                "retriever": "检索笔记", "tool_agent": "调用工具",
-                "answerer": "生成回答", "reviewer": "审查回答",
-            }
-            for step in graph.stream(state):
-                for node, updates in step.items():
-                    if node == "answerer" and updates.get("rounds", 1) > 1:
-                        emit({"type": "status", "stage": f"第{updates['rounds']}轮重写"})
-                    else:
-                        emit({"type": "status", "stage": stage_names.get(node, node)})
-                    if node == "answerer" and updates.get("answer"):
-                        last_answer = updates["answer"]
-                    if node == "retriever":
-                        hits = updates.get("hits") or []
-                        from_web = updates.get("from_web", False)
-                    if node == "planner":
-                        topic = updates.get("topic", "")
-                    if node == "overview":
-                        last_answer = updates.get("answer", "")
+            if _HAS_LANGGRAPH:
+                graph = build_graph()
+                state = _initial_state(question, history=history)
+                stage_names = {
+                    "planner": "规划问题", "overview": "整理知识库目录",
+                    "retriever": "检索笔记", "tool_agent": "调用工具",
+                    "answerer": "生成回答", "reviewer": "审查回答",
+                }
+                for step in graph.stream(state):
+                    for node, updates in step.items():
+                        if node == "answerer" and updates.get("rounds", 1) > 1:
+                            emit({"type": "status", "stage": f"第{updates['rounds']}轮重写"})
+                        else:
+                            emit({"type": "status", "stage": stage_names.get(node, node)})
+                        if node == "answerer" and updates.get("answer"):
+                            last_answer = updates["answer"]
+                        if node == "retriever":
+                            hits = updates.get("hits") or []
+                            from_web = updates.get("from_web", False)
+                        if node == "planner":
+                            topic = updates.get("topic", "")
+                        if node == "overview":
+                            last_answer = updates.get("answer", "")
+            else:
+                def _emit(stage: str) -> None:
+                    emit({"type": "status", "stage": stage})
+                state = _run_sequential(question, history=history, emit_status=_emit)
+                last_answer = state.get("answer", "")
+                hits = state.get("hits") or []
+                from_web = state.get("from_web", False)
+                topic = state.get("topic", "")
         except Exception as e:
             emit({"type": "error", "content": f"{type(e).__name__}: {e}"})
             q.put(None)
@@ -430,8 +515,11 @@ def ask_stream(question: str, history: str = ""):
 
 if __name__ == "__main__":
     print("\033[92m kb/graph.py 文件\033[0m")
-    g = build_graph()
-    print("图节点:", list(g.get_graph().nodes))
+    if _HAS_LANGGRAPH:
+        g = build_graph()
+        print("图节点:", list(g.get_graph().nodes))
+    else:
+        print("langgraph 未安装，使用顺序 fallback")
     r = ask("知识库里有什么内容？")
     print("回答:", r["answer"])
     print("来源:", r["sources"])

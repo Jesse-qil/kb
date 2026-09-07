@@ -199,6 +199,86 @@ def add_tags(tags: list[str], source: str = "") -> int:
     return added
 
 
+
+def delete_tag(tag: str) -> bool:
+    """从标签库删除一个标签。返回是否成功删除。"""
+    tag = _clean_tag(tag)
+    if not tag:
+        return False
+    ensure_seeded()
+    col = _collection()
+    with _lock:
+        if col is not None:
+            try:
+                existing = col.get(ids=[tag], include=["documents"])["ids"]
+                if not existing:
+                    return False
+                col.delete(ids=[tag])
+                return True
+            except Exception:
+                return False
+        else:
+            try:
+                f = _FALLBACK_FILE
+                if f.exists():
+                    cur = set(json.loads(f.read_text(encoding="utf-8")))
+                    if tag in cur:
+                        cur.discard(tag)
+                        f.write_text(json.dumps(sorted(cur), ensure_ascii=False, indent=2),
+                                     encoding="utf-8")
+                        return True
+            except Exception:
+                pass
+    return False
+
+
+def merge_tag(from_tag: str, to_tag: str) -> dict:
+    """合并标签：把 from_tag 合并到 to_tag，删除 from_tag。
+    返回 {ok, from_tag, to_tag, deleted_from, added_to}。
+    注意：此操作只改标签库，文档片段上的旧标签需要另行更新。"""
+    from_tag = _clean_tag(from_tag)
+    to_tag = _clean_tag(to_tag)
+    if not from_tag or not to_tag or from_tag == to_tag:
+        return {"ok": False, "error": "标签名无效或相同"}
+    ensure_seeded()
+    col = _collection()
+    with _lock:
+        if col is not None:
+            try:
+                # 确保目标标签存在
+                existing = col.get(ids=[to_tag], include=["documents"])["ids"]
+                added_to = False
+                if not existing:
+                    vecs = embed_texts([to_tag])
+                    col.upsert(ids=[to_tag], documents=[to_tag], embeddings=vecs,
+                               metadatas=[{"source": "merge_from:" + from_tag, "created_by": "merge"}])
+                    added_to = True
+                # 删除源标签
+                from_existing = col.get(ids=[from_tag], include=["documents"])["ids"]
+                deleted_from = False
+                if from_existing:
+                    col.delete(ids=[from_tag])
+                    deleted_from = True
+                return {"ok": True, "from_tag": from_tag, "to_tag": to_tag,
+                        "deleted_from": deleted_from, "added_to": added_to}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+        else:
+            try:
+                f = _FALLBACK_FILE
+                cur = set(json.loads(f.read_text(encoding="utf-8"))) if f.exists() else set()
+                added_to = to_tag not in cur
+                cur.add(to_tag)
+                deleted_from = from_tag in cur
+                cur.discard(from_tag)
+                f.write_text(json.dumps(sorted(cur), ensure_ascii=False, indent=2),
+                             encoding="utf-8")
+                return {"ok": True, "from_tag": from_tag, "to_tag": to_tag,
+                        "deleted_from": deleted_from, "added_to": added_to}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+
 def reset() -> None:
     """清空标签库（测试/重建用）。"""
     global _seeded

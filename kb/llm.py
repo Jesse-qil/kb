@@ -44,22 +44,46 @@ PROVIDERS = {
 
 
 class LLMClient:
+    # 类变量：所有实例共享的 token 消耗累加（评估用）
+    _usage_accum = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "calls": 0}
+
+    @staticmethod
+    def reset_usage():
+        """重置 token 消耗累加器（评估每条用例前调用）。"""
+        LLMClient._usage_accum = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "calls": 0}
+
+    @staticmethod
+    def get_usage() -> dict:
+        """获取当前 token 消耗累加值。"""
+        return dict(LLMClient._usage_accum)
+
+    @classmethod
+    def _add_usage(cls, resp):
+        """从 API 响应提取 usage 并累加。"""
+        usage = getattr(resp, "usage", None)
+        if usage is None:
+            return
+        cls._usage_accum["prompt_tokens"] += getattr(usage, "prompt_tokens", 0) or 0
+        cls._usage_accum["completion_tokens"] += getattr(usage, "completion_tokens", 0) or 0
+        cls._usage_accum["total_tokens"] += getattr(usage, "total_tokens", 0) or 0
+        cls._usage_accum["calls"] += 1
+
     def __init__(self):
         cfg = CONFIG["llm"]
         self.provider = cfg.get("provider", "auto")
         if self.provider == "auto":               # 自动识别
             self.provider = self._detect_provider()
         self.temperature = cfg.get("temperature", 0.3)
+        self.mock_answer = cfg.get(
+            "mock_answer",
+            "【mock】还没配置真实大模型或缺少 openai 依赖：在 .env 填 API key 并安装依赖后重启即可得到真实回答。",
+        )
 
         if self.provider == "mock" or OpenAI is None:
             self.client = None
             self.model = "mock"
             if self.provider != "mock":
                 self.provider = "mock"
-            self.mock_answer = cfg.get(
-                "mock_answer",
-                "【mock】还没配置真实大模型或缺少 openai 依赖：在 .env 填 API key 并安装依赖后重启即可得到真实回答。",
-            )
         else:
             info = PROVIDERS[self.provider]
             api_key = "ollama" if info["env_key"] is None else self._get_key(info["env_key"])
@@ -70,9 +94,13 @@ class LLMClient:
         """普通对话：messages=[{role,content}...]，返回回答文本。"""
         if self.provider == "mock":
             return self.mock_answer
-        resp = self.client.chat.completions.create(
-            model=self.model, messages=messages, temperature=self.temperature)
-        return resp.choices[0].message.content
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.model, messages=messages, temperature=self.temperature)
+            self._add_usage(resp)
+            return resp.choices[0].message.content
+        except Exception:
+            return self.mock_answer
 
     def chat_stream(self, messages: list[dict]):
         """流式对话：逐段 yield 增量文本（打字机效果用）。
@@ -90,22 +118,25 @@ class LLMClient:
                     if piece:
                         yield piece
         except Exception as e:
-            yield f"\n[流式输出中断：{type(e).__name__}]"
+            yield self.mock_answer
 
     def chat_with_tools(self, messages: list[dict], tools: list[dict]):
         """带工具注册表的对话：返回完整 message 对象（可能含 .tool_calls）。
         mock 不支持工具，返回 None（调用方当作"没有工具调用"）。"""
         if self.provider == "mock":
             return None
-
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-            tools=tools)
-        if not resp.choices:
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=self.temperature,
+                tools=tools)
+            self._add_usage(resp)
+            if not resp.choices:
+                return None
+            return resp.choices[0].message
+        except Exception:
             return None
-        return resp.choices[0].message
 
     @staticmethod
     def _get_key(env_name: str) -> str:

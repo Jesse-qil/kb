@@ -18,12 +18,20 @@ python .\tests\benchmark_retrieval.py
 
 # 快速模式：复用现有 chroma + chunk_cache，秒级（用于回归检索代码路径）
 python .\tests\benchmark_retrieval.py --no-ingest
+
+# Agent 评测：跑多 Agent 版本
+python .\tests\agent_eval.py
+
+# Agent 评测：只跑单 Agent 基线
+python .\tests\agent_eval.py --mode single
 ```
 
 ## 产物
 
 - `tests/results/latest.json`
 - `tests/results/latest.md`
+- `tests/results/agent_eval_latest.json`
+- `tests/results/agent_eval_latest.md`
 
 ## 用例分组
 

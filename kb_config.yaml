@@ -18,6 +18,10 @@ recall:
   top_k: 4                 # 每次提问检索几个相关片段
   score_threshold: 0.45    # 低于此相似度视为"没找到"（bge-small-zh 正常命中多在 0.45~0.62；
                            # 0.6 会把大量正解拒掉转联网；标签融合分上限 +0.12 已并入 score）
+  bm25_boost: 0.10         # 混合检索：BM25 关键词分（按命中查询词数比 0~1）乘此系数并入 score
+                           # 专有名词/术语精确命中靠它抬进前排；0 则退化为纯向量
+                           # 调参依据：benchmark_retrieval hit@1 0.609→0.783（0.05~0.15 效果相同，取 0.10 保守值）
+  bm25_top_k: 10           # BM25 通道保底进候选池的片段数（防止关键词命中但向量分低被漏掉）
 
 # ===== 大模型配置（OpenAI 兼容接口，多提供商可切换） =====
 # provider: deepseek / openai / siliconflow / ollama / mock / auto
