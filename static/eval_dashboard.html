@@ -282,8 +282,12 @@ async function loadData() {
   dashboard.innerHTML = '<div class="loading">正在加载评估数据...</div>';
 
   try {
-    const resp = await fetch('/api/eval/results');
+    const [resp, bmResp] = await Promise.all([
+      fetch('/api/eval/results'),
+      fetch('/api/eval/benchmark'),
+    ]);
     const json = await resp.json();
+    const bm = await bmResp.json();
     if (!json.ok) {
       dashboard.innerHTML = `<div class="error-box">
         <h3>⚠️ ${json.error}</h3>
@@ -291,6 +295,9 @@ async function loadData() {
       </div>`;
       return;
     }
+    // 检索 Benchmark（latest.json）挂到全局，renderDashboard 里渲染
+    window.__benchmark = (bm.ok && bm.exists) ? bm.summary : null;
+    window.__benchmarkMeta = bm.generated_at || '';
     renderDashboard(json.data);
   } catch (e) {
     dashboard.innerHTML = `<div class="error-box"><h3>❌ 加载失败</h3><p>${e.message}</p></div>`;
@@ -330,6 +337,11 @@ function renderDashboard(data) {
     </div>`;
   });
   html += '</div>';
+
+  // 检索 Benchmark 区块（hit@k / Recall@k / MRR）
+  if (window.__benchmark) {
+    html += buildBenchmarkHTML(window.__benchmark);
+  }
 
   // 图表区域
   html += `
@@ -414,6 +426,69 @@ function renderDashboard(data) {
   setTimeout(() => initCharts(s, cases), 100);
 }
 
+/* ===== 检索 Benchmark 区块（hit@k / Recall@k / MRR / 分组对比） ===== */
+function bmPct(v) {
+  return v === null || v === undefined ? 'N/A' : (v * 100).toFixed(1) + '%';
+}
+
+function buildBenchmarkHTML(bm) {
+  const f = bm.filtered || {}, g = bm.global || {};
+  const cards = [
+    { label: '检索 hit@1（限定领域）', value: f.hit1, color: '#667eea' },
+    { label: '检索 Recall@5（限定领域）', value: f.recall5, color: '#52c41a' },
+    { label: '检索 MRR（限定领域）', value: f.mrr, color: '#13c2c2' },
+    { label: '检索 hit@1（全库）', value: g.hit1, color: '#faad14' },
+    { label: '检索 Recall@5（全库）', value: g.recall5, color: '#eb2f96' },
+    { label: '检索 MRR（全库）', value: g.mrr, color: '#f5222d' },
+  ];
+  let html = `<div class="section-title">🔎 检索 Benchmark
+    <span class="eval-meta">${bm.total || 0} 例刁钻用例 · 最近运行：${window.__benchmarkMeta || 'latest.json'}</span>
+  </div>`;
+  html += '<div class="metrics-grid">';
+  cards.forEach(m => {
+    const barWidth = (m.value === null || m.value === undefined) ? '0%' : (m.value * 100) + '%';
+    html += `<div class="metric-card">
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-value">${bmPct(m.value)}</div>
+      <div class="metric-bar"><div class="metric-bar-fill" style="width:${barWidth};background:${m.color}"></div></div>
+    </div>`;
+  });
+  html += '</div>';
+
+  // 对比图 + 分组表
+  html += '<div class="chart-grid">'
+    + '<div class="chart-card"><div class="chart-title">指标对比：限定领域 vs 全库</div>'
+    + '<div class="chart-container" id="chartBenchmark"></div></div>'
+    + '<div class="chart-card"><div class="chart-title">各组 hit@1：限定领域 vs 全库</div>'
+    + '<div class="chart-container" id="chartBmGroup"></div></div>'
+    + '</div>';
+
+  // 分组明细表
+  const modes = [['filtered', '限定领域'], ['global', '全库']];
+  html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-title">分组明细（hit@k / Recall@k / MRR）</div>'
+    + '<div style="overflow-x:auto;"><table class="doc-table" style="width:100%;border-collapse:collapse;font-size:12px;">'
+    + '<thead><tr><th style="padding:6px 8px;text-align:left;">模式</th><th style="padding:6px 8px;text-align:left;">分组</th>'
+    + '<th style="padding:6px 8px;">用例</th><th style="padding:6px 8px;">hit@1</th><th style="padding:6px 8px;">hit@3</th>'
+    + '<th style="padding:6px 8px;">hit@5</th><th style="padding:6px 8px;">Recall@3</th><th style="padding:6px 8px;">Recall@5</th>'
+    + '<th style="padding:6px 8px;">MRR</th></tr></thead><tbody>';
+  modes.forEach(([mode, label]) => {
+    const groups = (bm[mode] || {}).by_group || {};
+    Object.keys(groups).forEach(grp => {
+      const r = groups[grp];
+      html += `<tr><td style="padding:6px 8px;">${label}</td><td style="padding:6px 8px;">${grp}</td>`
+        + `<td style="padding:6px 8px;text-align:center;">${r.count}</td>`
+        + `<td style="padding:6px 8px;text-align:center;">${bmPct(r.hit1)}</td>`
+        + `<td style="padding:6px 8px;text-align:center;">${bmPct(r.hit3)}</td>`
+        + `<td style="padding:6px 8px;text-align:center;">${bmPct(r.hit5)}</td>`
+        + `<td style="padding:6px 8px;text-align:center;">${bmPct(r.recall3)}</td>`
+        + `<td style="padding:6px 8px;text-align:center;">${bmPct(r.recall5)}</td>`
+        + `<td style="padding:6px 8px;text-align:center;">${bmPct(r.mrr)}</td></tr>`;
+    });
+  });
+  html += '</tbody></table></div></div>';
+  return html;
+}
+
 function initCharts(s, cases) {
   // 按领域分类对比（过滤掉无来源预期的 kind）
   const byKind = s.by_kind || {};
@@ -486,6 +561,47 @@ function initCharts(s, cases) {
       }]
     });
     charts.tool = chartTool;
+  }
+
+  // 检索 Benchmark 图表
+  if (window.__benchmark) {
+    const bm = window.__benchmark;
+    const f = bm.filtered || {}, g = bm.global || {};
+    const el1 = document.getElementById('chartBenchmark');
+    if (el1) {
+      const c1 = echarts.init(el1);
+      c1.setOption({
+        tooltip: { trigger: 'axis', formatter: p => p[0].name + ': ' + (p[0].value*100).toFixed(1) + '%' },
+        legend: { data: ['限定领域', '全库'], bottom: 0 },
+        grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+        xAxis: { type: 'category', data: ['hit@1', 'hit@3', 'hit@5', 'Recall@3', 'Recall@5', 'MRR'], axisLabel: { fontSize: 11 } },
+        yAxis: { type: 'value', max: 1, axisLabel: { formatter: v => (v*100).toFixed(0)+'%' } },
+        series: [
+          { name: '限定领域', type: 'bar', data: [f.hit1, f.hit3, f.hit5, f.recall3, f.recall5, f.mrr], itemStyle: { color: '#667eea' }, barWidth: '30%' },
+          { name: '全库', type: 'bar', data: [g.hit1, g.hit3, g.hit5, g.recall3, g.recall5, g.mrr], itemStyle: { color: '#faad14' }, barWidth: '30%' },
+        ]
+      });
+      charts.benchmark = c1;
+    }
+    // 各组 hit@1 对比（filtered vs global）
+    const el2 = document.getElementById('chartBmGroup');
+    if (el2) {
+      const fg = (f.by_group || {}), gg = (g.by_group || {});
+      const groups = Object.keys(fg);
+      const c2 = echarts.init(el2);
+      c2.setOption({
+        tooltip: { trigger: 'axis', formatter: p => p[0].name + ': ' + (p[0].value*100).toFixed(1) + '%' },
+        legend: { data: ['限定领域', '全库'], bottom: 0 },
+        grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+        xAxis: { type: 'category', data: groups, axisLabel: { fontSize: 10, interval: 0, rotate: 30 } },
+        yAxis: { type: 'value', max: 1, axisLabel: { formatter: v => (v*100).toFixed(0)+'%' } },
+        series: [
+          { name: '限定领域', type: 'bar', data: groups.map(x => (fg[x] || {}).hit1 ?? 0), itemStyle: { color: '#667eea' }, barWidth: '30%' },
+          { name: '全库', type: 'bar', data: groups.map(x => (gg[x] || {}).hit1 ?? 0), itemStyle: { color: '#faad14' }, barWidth: '30%' },
+        ]
+      });
+      charts.bmGroup = c2;
+    }
   }
 
   // 响应式

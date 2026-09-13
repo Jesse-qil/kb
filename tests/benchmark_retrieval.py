@@ -64,7 +64,10 @@ def _full_reset_and_ingest() -> None:
     ingest(verbose=False)
 
 
-def evaluate_case(case: dict, top_k: int = 3, topic_filter: str = "") -> dict:
+def evaluate_case(case: dict, top_k: int = 5, topic_filter: str = "") -> dict:
+    """单条评估：query 取 top_k=5，计算 hit@1/3/5、MRR、召回率。
+    单答案场景 Recall@k == hit@k（答案在 top-k 内即命中），
+    但明确输出 recall 指标便于业务口径沟通。"""
     hits = query(case["question"], topic=topic_filter, top_k=top_k)
     ranked = [h["source"] for h in hits]
     expected = case["expected_source"]
@@ -75,6 +78,7 @@ def evaluate_case(case: dict, top_k: int = 3, topic_filter: str = "") -> dict:
         "top1": ranked[0] if ranked else None,
         "hit1": bool(ranked) and ranked[0] == expected,
         "hit3": expected in ranked[:3],
+        "hit5": expected in ranked[:5],
         "rank": rank,
         "rr": 1 / rank if rank else 0.0,
     }
@@ -84,22 +88,30 @@ def summarize(rows: list[dict]) -> dict:
     total = len(rows)
     hit1 = sum(1 for r in rows if r["hit1"])
     hit3 = sum(1 for r in rows if r["hit3"])
+    hit5 = sum(1 for r in rows if r["hit5"])
     mrr = statistics.mean(r["rr"] for r in rows) if rows else 0.0
     by_group = defaultdict(list)
     for row in rows:
         by_group[row.get("group", "default")].append(row)
     grouped = {}
     for group, items in by_group.items():
+        n = len(items)
         grouped[group] = {
-            "count": len(items),
-            "hit1": sum(1 for r in items if r["hit1"]) / len(items),
-            "hit3": sum(1 for r in items if r["hit3"]) / len(items),
+            "count": n,
+            "hit1": sum(1 for r in items if r["hit1"]) / n,
+            "hit3": sum(1 for r in items if r["hit3"]) / n,
+            "hit5": sum(1 for r in items if r["hit5"]) / n,
+            "recall3": sum(1 for r in items if r["hit3"]) / n,   # 单答案 Recall@3 == hit@3
+            "recall5": sum(1 for r in items if r["hit5"]) / n,
             "mrr": statistics.mean(r["rr"] for r in items),
         }
     return {
         "total": total,
         "hit1": hit1 / total if total else 0.0,
         "hit3": hit3 / total if total else 0.0,
+        "hit5": hit5 / total if total else 0.0,
+        "recall3": hit3 / total if total else 0.0,
+        "recall5": hit5 / total if total else 0.0,
         "mrr": mrr,
         "by_group": grouped,
     }
@@ -118,10 +130,16 @@ def write_report(summary: dict, rows: list[dict]) -> None:
     lines.append(f"- total: {summary['total']}")
     lines.append(f"- filtered hit@1: {summary['filtered']['hit1']:.3f}")
     lines.append(f"- filtered hit@3: {summary['filtered']['hit3']:.3f}")
+    lines.append(f"- filtered hit@5: {summary['filtered']['hit5']:.3f}")
     lines.append(f"- filtered MRR: {summary['filtered']['mrr']:.3f}")
+    lines.append(f"- filtered Recall@3: {summary['filtered']['recall3']:.3f}")
+    lines.append(f"- filtered Recall@5: {summary['filtered']['recall5']:.3f}")
     lines.append(f"- global hit@1: {summary['global']['hit1']:.3f}")
     lines.append(f"- global hit@3: {summary['global']['hit3']:.3f}")
+    lines.append(f"- global hit@5: {summary['global']['hit5']:.3f}")
     lines.append(f"- global MRR: {summary['global']['mrr']:.3f}")
+    lines.append(f"- global Recall@3: {summary['global']['recall3']:.3f}")
+    lines.append(f"- global Recall@5: {summary['global']['recall5']:.3f}")
     lines.append("")
     lines.append("| id | q | expected | filtered top1 | global top1 | f hit1 | g hit1 |")
     lines.append("|---|---|---|---|---|---:|---:|")
@@ -137,7 +155,11 @@ def write_report(summary: dict, rows: list[dict]) -> None:
     for mode in ("filtered", "global"):
         lines.append(f"### {mode}")
         for group, info in summary[mode]["by_group"].items():
-            lines.append(f"- {group}: hit@1={info['hit1']:.3f}, hit@3={info['hit3']:.3f}, MRR={info['mrr']:.3f}")
+            lines.append(
+                f"- {group}: hit@1={info['hit1']:.3f}, hit@3={info['hit3']:.3f}, "
+                f"hit@5={info['hit5']:.3f}, Recall@3={info['recall3']:.3f}, "
+                f"Recall@5={info['recall5']:.3f}, MRR={info['mrr']:.3f}"
+            )
     LATEST_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

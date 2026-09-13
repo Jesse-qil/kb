@@ -384,6 +384,35 @@
   /* ==================== 交互 ==================== */
 
   var dragX = 0, dragY = 0;
+  var dragRaf = null;       // 拖拽专用渲染循环
+  var pendingDraw = false;  // hover 重绘合并标志
+
+  // 高频事件（mousemove）合并到 rAF：一帧最多重绘一次，避免 100+ 次/秒全量绘制卡死
+  function requestDraw() {
+    if (pendingDraw) return;
+    pendingDraw = true;
+    requestAnimationFrame(function () {
+      pendingDraw = false;
+      draw();
+    });
+  }
+
+  // 拖拽渲染循环：每帧画 + 隔帧跑一步轻量物理（拖拽节点固定、邻居跟随）
+  function startDragLoop() {
+    if (dragRaf) return;
+    var tick = 0;
+    function loop() {
+      tick++;
+      if (tick % 2 === 0) step(1);
+      draw();
+      dragRaf = requestAnimationFrame(loop);
+    }
+    dragRaf = requestAnimationFrame(loop);
+  }
+
+  function stopDragLoop() {
+    if (dragRaf) { cancelAnimationFrame(dragRaf); dragRaf = null; }
+  }
 
   function canvasPos(ev) {
     var rect = canvas.getBoundingClientRect();
@@ -407,6 +436,7 @@
       dragIdx = i;
       dragX = layout[i].x; dragY = layout[i].y;
       canvas.classList.add("dragging");
+      startDragLoop();          // 拖拽渲染循环接管（节流到帧率）
       ev.preventDefault();
     }
   }
@@ -414,32 +444,35 @@
   function onMove(ev) {
     var p = canvasPos(ev);
     if (dragIdx >= 0) {
+      // 只更新坐标，绘制交给 dragLoop（不再每次 mousemove 全量重绘）
       dragX = p.x; dragY = p.y;
-      if (!running) draw();   // 动画已停：拖拽即时重绘，不跑物理
       return;
     }
     var i = pick(p.x, p.y);
     if (i !== hoverIdx) {
       hoverIdx = i;
-      if (!running) draw();   // 动画已停：hover 即时高亮
-    }
-    if (i >= 0) {
-      var nd = layout[i];
-      tip.style.display = "block";
-      tip.style.left = Math.min(p.x + 14, W - 270) + "px";
-      tip.style.top = Math.max(p.y - 10, 6) + "px";
-      tip.innerHTML =
-        '<div class="t-name">' + esc(nd.name) + "</div>" +
-        '<div class="t-sub">' + TYPE_LABEL[nd.type] +
-        (nd.topic ? " · " + esc(nd.topic) : "") +
-        " · 关联 " + nd.deg + "</div>";
-    } else {
-      tip.style.display = "none";
+      if (!running) requestDraw();   // 动画已停：hover 高亮合并到 rAF
+      if (i >= 0) {
+        var nd = layout[i];
+        tip.style.display = "block";
+        tip.style.left = Math.min(p.x + 14, W - 270) + "px";
+        tip.style.top = Math.max(p.y - 10, 6) + "px";
+        tip.innerHTML =
+          '<div class="t-name">' + esc(nd.name) + "</div>" +
+          '<div class="t-sub">' + TYPE_LABEL[nd.type] +
+          (nd.topic ? " · " + esc(nd.topic) : "") +
+          " · 关联 " + nd.deg + "</div>";
+      } else {
+        tip.style.display = "none";
+      }
     }
   }
 
   function onUp() {
-    if (dragIdx >= 0 && !running) settle(false);  // 松手后布局重新收敛
+    if (dragIdx >= 0) {
+      stopDragLoop();
+      if (!running) settle(false);   // 松手后布局重新收敛
+    }
     dragIdx = -1;
     canvas.classList.remove("dragging");
   }

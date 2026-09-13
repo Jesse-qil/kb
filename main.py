@@ -876,6 +876,28 @@ def api_eval_history():
     return {"ok": True, "files": result}
 
 
+@app.get("/api/eval/benchmark")
+def api_eval_benchmark():
+    """检索 Benchmark：latest.json 的结构化指标（hit@1/3/5、Recall@k、MRR、分组对比）。"""
+    import json as _json
+    f = KB_ROOT / "tests" / "results" / "latest.json"
+    if not f.exists():
+        return {"ok": True, "exists": False}
+    try:
+        data = _json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return {"ok": False, "error": "latest.json 解析失败"}
+    summary = data.get("summary", {})
+    return {
+        "ok": True,
+        "exists": True,
+        "generated_at": data.get("generated_at", ""),
+        "summary": summary,
+        "case_count": len(data.get("cases", [])),
+        "cases": data.get("cases", [])[:60],
+    }
+
+
 #  评估后台运行
 def _run_eval_bg(limit: int = 0, use_judge: bool = False):
     """在后台线程运行评估脚本，进度写入 _EVAL_STATE。"""
