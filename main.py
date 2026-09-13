@@ -448,6 +448,78 @@ def api_chat_stream(req: ChatStreamRequest):
     )
 
 
+# ===== 知识图谱 API =====
+_GRAPH_STATE = {
+    "running": False,
+    "stage": "",
+    "percent": 0,
+    "result": None,
+    "error": None,
+}
+_GRAPH_LOCK = threading.Lock()
+
+
+def _run_graph_bg(extract_entities):
+    """后台重建图谱：元数据层秒级；实体层 LLM 抽取较慢（每篇数秒）。"""
+    from kb.kg.build import build
+    with _GRAPH_LOCK:
+        _GRAPH_STATE.update({"running": True, "stage": "构建图谱", "percent": 0,
+                             "result": None, "error": None})
+    try:
+        r = build(extract_entities=extract_entities, verbose=True)
+        with _GRAPH_LOCK:
+            _GRAPH_STATE.update({"percent": 100, "stage": "完成", "result": r})
+    except Exception as e:
+        with _GRAPH_LOCK:
+            _GRAPH_STATE.update({"stage": "出错",
+                                 "error": f"{type(e).__name__}: {e}"})
+    finally:
+        with _GRAPH_LOCK:
+            _GRAPH_STATE["running"] = False
+
+
+def start_bg_graph(extract_entities=None) -> bool:
+    """若没在跑则启动后台图谱重建，返回是否新启动。"""
+    with _GRAPH_LOCK:
+        if _GRAPH_STATE["running"]:
+            return False
+    t = threading.Thread(target=_run_graph_bg, args=(extract_entities,), daemon=True)
+    t.start()
+    return True
+
+
+@app.get("/api/graph")
+def api_graph():
+    """返回知识图谱 JSON（前端可视化：节点/边/meta）。"""
+    from kb.kg import store
+    g = store.load()
+    if not g["nodes"]:
+        return {"ok": True, "empty": True, "meta": {}, "nodes": [], "edges": []}
+    return {"ok": True, "empty": False,
+            "meta": g.get("meta", {}),
+            "nodes": g.get("nodes", []),
+            "edges": g.get("edges", [])}
+
+
+@app.post("/api/graph/rebuild")
+async def api_graph_rebuild(request: Request):
+    """重建知识图谱（后台执行）。body: {extract_entities: bool} 缺省按配置。"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    extract = body.get("extract_entities")
+    started = start_bg_graph(extract)
+    return {"ok": True, "started": started}
+
+
+@app.get("/api/graph/status")
+def api_graph_status():
+    """前端轮询图谱构建状态。"""
+    with _GRAPH_LOCK:
+        return dict(_GRAPH_STATE)
+
+
 # ===== 管理层接口 =====
 @app.get("/api/manage/stats")
 def api_manage_stats():

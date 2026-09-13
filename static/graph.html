@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🕸 知识图谱</title>
+<link rel="stylesheet" href="/static/css/common.css">
+<style>
+/* ===== 图谱页私有样式 ===== */
+.main-area { overflow: hidden; }
+
+/* 统计卡行 */
+.stat-row {
+  display: flex; gap: 12px; padding: 14px 18px 8px;
+  flex-wrap: wrap;
+}
+.stat-card {
+  flex: 1 1 120px; min-width: 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px; padding: 10px 14px;
+}
+.stat-card .num { font-size: 20px; font-weight: 600; color: #f2f6fc; }
+.stat-card .lbl { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
+/* 筛选/图例行 */
+.ctrl-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 6px 18px 10px; flex-wrap: wrap;
+}
+.ctrl-row label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #c5d0e0; cursor: pointer;
+  user-select: none;
+}
+.ctrl-row input[type=checkbox] { accent-color: var(--primary); }
+.legend-dot {
+  width: 10px; height: 10px; border-radius: 3px; display: inline-block;
+}
+
+/* 画布容器 */
+.graph-wrap {
+  flex: 1; position: relative; min-height: 0;
+  margin: 0 18px 16px;
+  background: rgba(9, 14, 26, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px; overflow: hidden;
+}
+.graph-wrap canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.graph-wrap canvas.dragging { cursor: grabbing; }
+
+/* hover tooltip */
+#gTip {
+  position: absolute; pointer-events: none; z-index: 5;
+  background: rgba(16, 24, 42, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text); font-size: 12px;
+  padding: 8px 12px; border-radius: 10px; max-width: 260px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  display: none; line-height: 1.5;
+}
+#gTip .t-name { font-weight: 600; color: #f2f6fc; }
+#gTip .t-sub { color: var(--text-dim); font-size: 11px; }
+
+/* 空态 */
+.empty-tip {
+  position: absolute; inset: 0; display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
+  color: var(--text-dim); font-size: 13px; gap: 10px; text-align: center;
+  padding: 20px;
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 左侧边栏 ===== -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="logo">📚</div>
+    <h1>个人知识库</h1>
+  </div>
+  <a class="nav-item" href="/static/index.html">💬 问答对话</a>
+  <a class="nav-item" href="/static/manage.html">🗂 知识库管理</a>
+  <a class="nav-item active" href="/static/graph.html">🕸 知识图谱</a>
+  <a class="nav-item" href="/static/eval_dashboard.html">📊 评估仪表盘</a>
+  <div class="sidebar-divider"></div>
+  <div class="kb-section">
+    <div class="kb-title">操作</div>
+    <button class="kb-btn" style="width:100%;" onclick="rebuildGraph(false)">🔁 重建图谱（元数据）</button>
+    <button class="kb-btn" style="width:100%;margin-top:6px;" onclick="rebuildGraph(true)">🧠 重建图谱 + 实体抽取（LLM）</button>
+  </div>
+  <div class="sidebar-footer" id="stats"></div>
+</aside>
+
+<div class="sidebar-mask" id="sidebarMask" onclick="toggleSidebar()"></div>
+
+<!-- ===== 主区 ===== -->
+<main class="main-area">
+  <div class="topbar">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-title">🕸 知识图谱 <span id="kgStatus" style="color:var(--text-faint);font-size:11px;"></span></div>
+    <div style="flex:1"></div>
+    <button class="topbar-btn" onclick="loadGraph()" title="重新读取图谱数据">🔄 刷新</button>
+  </div>
+
+  <div class="stat-row" id="statRow"></div>
+
+  <div class="ctrl-row" id="ctrlRow">
+    <label><input type="checkbox" data-t="doc" checked> <span class="legend-dot" style="background:#4DA3FF"></span> 文档</label>
+    <label><input type="checkbox" data-t="topic" checked> <span class="legend-dot" style="background:#9EACEA"></span> 领域</label>
+    <label><input type="checkbox" data-t="tag" checked> <span class="legend-dot" style="background:#F4B393"></span> 标签</label>
+    <label><input type="checkbox" data-t="entity" checked> <span class="legend-dot" style="background:#94D8C3"></span> 实体</label>
+    <span style="flex:1"></span>
+    <span style="font-size:11px;color:var(--text-faint);">拖拽节点 · 悬停查看关联</span>
+  </div>
+
+  <div class="graph-wrap" id="graphWrap">
+    <canvas id="graphCanvas"></canvas>
+    <div class="empty-tip" id="emptyTip" style="display:none;">
+      <div style="font-size:22px;">🕸</div>
+      <div>知识图谱还没构建。点击左侧「重建图谱」生成。</div>
+      <div style="font-size:11px;color:var(--text-faint);">元数据层（文档-领域-标签）秒级完成；实体层需 LLM 抽取，每篇数秒。</div>
+    </div>
+  </div>
+
+  <div id="gTip"></div>
+</main>
+
+<div id="toast-container"></div>
+
+<script src="/static/js/common.js"></script>
+<script src="/static/js/graph.js"></script>
+</body>
+</html>
