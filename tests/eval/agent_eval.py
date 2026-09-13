@@ -8,7 +8,7 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -17,7 +17,7 @@ from kb.agents.single import ask as ask_single
 from kb.llm import LLMClient
 from kb.config import recall_cfg
 CASES_FILE = Path(__file__).with_name("agent_eval_cases.json")
-RESULTS_DIR = Path(__file__).with_name("results")
+RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
 HISTORY_DIR = RESULTS_DIR / "history"
 LATEST_JSON = RESULTS_DIR / "agent_eval_latest.json"
 LATEST_MD = RESULTS_DIR / "agent_eval_latest.md"

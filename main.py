@@ -837,7 +837,7 @@ def api_eval_results():
     """返回最新 Agent 评估结果 JSON。"""
     eval_json = KB_ROOT / "tests" / "results" / "agent_eval_latest.json"
     if not eval_json.exists():
-        return {"ok": False, "error": "暂无评估结果，请先运行 tests/agent_eval.py"}
+        return {"ok": False, "error": "暂无评估结果，请先运行 tests/eval/agent_eval.py"}
     try:
         import json as _json
         data = _json.loads(eval_json.read_text(encoding="utf-8"))
@@ -910,7 +910,7 @@ def _run_eval_bg(limit: int = 0, use_judge: bool = False):
             "result": None, "error": None, "output": "",
         })
     try:
-        cmd = [sys.executable, str(KB_ROOT / "tests" / "agent_eval.py")]
+        cmd = [sys.executable, str(KB_ROOT / "tests" / "eval" / "agent_eval.py")]
         if limit and limit > 0:
             cmd += ["--limit", str(limit)]
         if use_judge:

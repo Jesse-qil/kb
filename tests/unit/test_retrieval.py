@@ -5,7 +5,7 @@
 2. filtered 路径下 hit@1 ≥ 期望阈值
 3. 跨主题混淆用例（react_confusion / agent_confusion / vector_db）能命中正确 topic
 
-依赖：chroma + chunk_cache 已有数据（跑 `python tests/benchmark_retrieval.py --no-ingest` 即可）。
+依赖：chroma + chunk_cache 已有数据（跑 `python tests/eval/benchmark_retrieval.py --no-ingest` 即可）。
 """
 from __future__ import annotations
 
@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-CASES_FILE = Path(__file__).with_name("retrieval_cases.json")
+CASES_FILE = ROOT / "tests" / "eval" / "retrieval_cases.json"
 
 
 @pytest.fixture(scope="module")

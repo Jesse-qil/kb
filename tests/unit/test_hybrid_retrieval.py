@@ -7,7 +7,7 @@
 4. 降级：_HAS_BM25=False 时行为与纯向量一致、不报错
 5. 返回结构完整：text/source/topic/heading/tags/score
 
-依赖：chroma + chunk_cache 已有数据（跑 `python tests/benchmark_retrieval.py --no-ingest` 即可）。
+依赖：chroma + chunk_cache 已有数据（跑 `python tests/eval/benchmark_retrieval.py --no-ingest` 即可）。
 """
 from __future__ import annotations
 

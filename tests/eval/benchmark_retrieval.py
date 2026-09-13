@@ -8,7 +8,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -17,7 +17,7 @@ from kb.config import KNOWLEDGE_DIR, chroma_dir, chunks_file, index_file
 from kb.storage.vector_store import query
 
 CASES_FILE = Path(__file__).with_name("retrieval_cases.json")
-RESULTS_DIR = Path(__file__).with_name("results")
+RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
 LATEST_JSON = RESULTS_DIR / "latest.json"
 LATEST_MD = RESULTS_DIR / "latest.md"
 

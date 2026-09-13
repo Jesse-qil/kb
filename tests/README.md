@@ -1,6 +1,22 @@
-# Retrieval Research
+# tests 测试目录说明
 
-这里放知识库检索研究用的基准与结果。
+## 目录结构
+
+```
+tests/
+├── README.md            # 本文档
+├── conftest.py          # pytest 全局 fixture（禁 rerank/KG、隔离 chunk_cache）
+├── unit/                # 单元测试（pytest 自动收集，11 个 test_*.py）
+├── eval/                # 评估框架
+│   ├── benchmark_retrieval.py   # 检索 benchmark（23 例刁钻题）
+│   ├── agent_eval.py            # Agent 端到端评测（50 例）
+│   ├── retrieval_cases.json     # 检索用例（含 expected_source）
+│   └── agent_eval_cases.json    # Agent 评测用例
+└── results/             # 运行产物（gitignore，不入库）
+```
+
+> 说明：单元测试与评估框架分开，避免 tests/ 根目录混杂三种职责；
+> `results/` 是每次运行生成的产物，已被 gitignore（保留 `.gitkeep` 占位）。
 
 ## 口径
 
@@ -14,16 +30,16 @@
 
 ```powershell
 # 全量重建 + 跑 benchmark（默认冷启动，约 5-8 分钟）
-python .\tests\benchmark_retrieval.py
+python .\tests\eval\benchmark_retrieval.py
 
 # 快速模式：复用现有 chroma + chunk_cache，秒级（用于回归检索代码路径）
-python .\tests\benchmark_retrieval.py --no-ingest
+python .\tests\eval\benchmark_retrieval.py --no-ingest
 
 # Agent 评测：跑多 Agent 版本
-python .\tests\agent_eval.py
+python .\tests\eval\agent_eval.py
 
 # Agent 评测：只跑单 Agent 基线
-python .\tests\agent_eval.py --mode single
+python .\tests\eval\agent_eval.py --mode single
 ```
 
 ## 产物
@@ -45,7 +61,7 @@ python .\tests\agent_eval.py --mode single
 
 ## 增加样本
 
-往 `tests/retrieval_cases.json` 里加一条：
+往 `tests/eval/retrieval_cases.json` 里加一条：
 
 ```json
 {
