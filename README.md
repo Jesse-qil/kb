@@ -2,18 +2,19 @@
 
 > RAG-based personal knowledge base with LangGraph multi-agent Q&A.
 
-把 `.md / .docx / .pdf` 笔记丢进 `knowledge/raw/`，系统自动完成**增量入库 → 分块 → 语义打标 → 向量化 → 登记台账**，即可通过 Web / CLI 进行检索问答。检索采用**向量（bge-small-zh）+ BM25 关键词双路召回**，问答支持**单 Agent**、**LangGraph 多 Agent 协作**与 **Function Calling 工具调用**。
+把 `.md / .docx / .pdf` 笔记丢进 `knowledge/raw/`，系统自动完成**增量入库 → 分块 → 语义打标 → 向量化 → 登记台账**，即可通过 Web / CLI 进行检索问答。检索采用**向量（bge-small-zh）+ BM25 关键词双路召回 + 图谱关联文档三路召回 → 交叉编码器重排**，问答支持**单 Agent**、**LangGraph 多 Agent 协作**与 **Function Calling 工具调用**。
 
 ## 核心特性
 
 - 📥 **自动增量入库**：hash 对比台账，只处理新增/修改的文档，未变文档零重复计算
 - 🏷️ **标签自治**：LLM 零样本 + embedding 语义复用，冷启动无需标注数据（阈值经 101 篇实测校准）
-- 🔍 **双路混合检索**：Chroma 向量（本地 bge 嵌入，离线免费）+ BM25 关键词保底加权融合
+- 🔍 **三路混合检索 + 重排**：Chroma 向量（本地 bge 嵌入，离线免费）+ BM25 关键词保底 + 图谱关联文档，融合后经交叉编码器 `bge-reranker-base` 精细重排
+- 🕸️ **知识图谱**：双层图谱——元数据层（文档-领域-标签，零 LLM）自动构建 + 实体层（LLM 增量抽取三元组），前端 Canvas 力导向可视化，检索时实体命中自动拉关联文档进候选池
 - 🤖 **多 Agent 协作**：LangGraph 编排 Planner → Retriever → Answerer → Reviewer，审查不通过自动打回重写（≤3 轮）
 - 🛠️ **Function Calling**：知识库检索 / 子进程安全执行 Python / 联网搜索，LLM 自主决定调用
 - 🧠 **长期记忆**：跨会话用户画像（facts / prefs / goals）自动提炼并回灌
-- 🌐 **Web 三页互通**：问答 / 知识库管理 / 评估仪表盘，SSE 流式输出，导入进度弹窗
-- ✅ **可评测**：pytest 60/60 全绿，自带检索 benchmark 与 Agent 自动评测框架
+- 🌐 **Web 四页互通**：问答 / 知识库管理 / 知识图谱 / 评估仪表盘，SSE 流式输出，导入进度弹窗
+- ✅ **可评测**：pytest 69/69 全绿，自带检索 benchmark 与 Agent 自动评测框架
 
 ## 架构
 
@@ -85,11 +86,14 @@ python -m kb.cli list                   # 查看库中文档
 
 ## 检索效果（23 例基准，`tests/benchmark_retrieval.py`）
 
-| 指标 | 纯向量基线 | 混合检索（向量 + BM25） |
-|---|---:|---:|
-| filtered hit@1 | 0.609 | **0.783**（+28.6%） |
-| filtered MRR | — | 0.804 |
-| global hit@1 | 0.348 | **0.435** |
+| 指标 | 纯向量基线 | 混合检索 | 三路召回 + 重排（当前） |
+|---|---|---|---:|
+| filtered hit@1 | 0.609 | 0.783 | **0.826**（+5.5%） |
+| filtered MRR | — | 0.804 | **0.841** |
+| global hit@1 | 0.348 | 0.435 | **0.522**（+20%） |
+| global MRR | — | 0.514 | **0.580** |
+
+> 关键改进：扩大召回（无标签时向量通道也从 top_k 扩到 top_k×5，让整本书型 PDF 的正确 chunk 先进候选池）+ 交叉编码器加分微调（以池内最低分为基线，分差×权重并入融合分，不颠覆融合排序）。async 混淆组 100% 命中，agent_confusion 组 MRR 从 0 → 0.167（正确 chunk 已能进前 3）。
 
 ## Agent 评测（50 例，`tests/agent_eval.py`）
 
@@ -105,7 +109,9 @@ python -m kb.cli list                   # 查看库中文档
 | Web | FastAPI · Uvicorn · 原生 HTML/CSS/JS（SSE 流式） |
 | 向量库 | ChromaDB（本地持久化） |
 | 嵌入 | sentence-transformers · BAAI/bge-small-zh-v1.5 |
-| 检索 | 向量余弦 + BM25（jieba 分词 / rank-bm25）加权融合 |
+| 重排 | sentence-transformers CrossEncoder · BAAI/bge-reranker-base（懒加载，缺失自动降级） |
+| 检索 | 向量余弦 + BM25（jieba 分词 / rank-bm25）+ 图谱关联，加权融合后交叉编码器重排 |
+| 知识图谱 | 自建 JSON 图（doc/topic/tag/entity 四类节点）· LLM 三元组抽取 · Canvas 力导向可视化 |
 | Agent | LangGraph（StateGraph 多节点编排）· Function Calling（OpenAI 兼容接口） |
 | LLM | DeepSeek / OpenAI 兼容多提供商，无 key 自动降级 mock |
 | 文档解析 | pypdf · python-docx |
@@ -114,26 +120,29 @@ python -m kb.cli list                   # 查看库中文档
 
 ```
 kb-v2/
-├─ main.py                 # FastAPI 入口（/api/chat /api/ingest /api/upload /api/eval/results）
+├─ main.py                 # FastAPI 入口（/api/chat /api/ingest /api/graph /api/eval/results）
 ├─ kb/                     # 代码包
 │   ├─ agents/             #   单 Agent / LangGraph 多 Agent / 工具注册表
 │   ├─ ingestion/          #   扫描 / 分块 / 打标 / 增量管道
-│   ├─ storage/            #   Chroma 向量库（双路召回） / 台账
+│   ├─ kg/                 #   知识图谱（构建 / 存储 / 检索增强）
+│   ├─ storage/            #   Chroma 向量库（三路召回+重排） / 台账
+│   ├─ rerank.py           #   交叉编码器重排（懒加载 + 静默降级）
 │   └─ embedding.py llm.py prompts.py memory.py web_search.py config.py
-├─ static/                 # 前端三页（问答 / 管理 / 评估仪表盘）
-├─ tests/                  # pytest 60 例 + 检索 benchmark + Agent 评测
-├─ scripts/                # 运维脚本（clear_chroma 等）
-├─ knowledge/              # 数据层（raw 原始笔记 / 台账 / 向量库，均可重建）
+├─ static/                 # 前端四页（问答 / 管理 / 知识图谱 / 评估仪表盘）
+├─ tests/                  # pytest 69 例 + 检索 benchmark + Agent 评测
+├─ scripts/                # 运维脚本（build_graph / clear_chroma 等）
+├─ knowledge/              # 数据层（raw 原始笔记 / 台账 / 图谱 / 向量库，均可重建）
 ├─ person_document/        # 项目文档（面试八股深挖.md 公开；其余本地维护）
-├─ kb_config.yaml          # 知识库配置（分块、召回、Agent、打标参数）
+├─ kb_config.yaml          # 知识库配置（分块、召回、重排、图谱、Agent、打标参数）
 └─ requirements.txt
 ```
 
 ## 测试与评测
 
 ```bash
-python -m pytest -ra -q                        # 60/60 全绿
-python tests/benchmark_retrieval.py --no-ingest  # 检索 benchmark（秒级）
+python -m pytest -ra -q                        # 69/69 全绿
+python tests/benchmark_retrieval.py --no-ingest  # 检索 benchmark（重排开启时含模型加载）
+python scripts/build_graph.py                  # 构建知识图谱（--entities 加 LLM 实体抽取）
 python tests/agent_eval.py                     # Agent 自动评测（50 例）
 ```
 
@@ -141,20 +150,22 @@ python tests/agent_eval.py                     # Agent 自动评测（50 例）
 
 # 开发备忘（维护者向）
 
-> 更新：2026-09-07 ｜ pytest 60/60 ｜ 混合检索已上线 ｜ 前端三页互通 ｜ 已推 GitHub
+> 更新：2026-09-13 ｜ pytest 69/69 ｜ 重排 + 知识图谱已上线 ｜ 已推 GitHub
 
 ## 当前状态
 
-- **pytest 60/60 全绿**（chunk_cache 27 + memory 18 + retrieval 5 + hybrid_retrieval 10）
-- **混合检索已上线**：filtered hit@1 0.783、MRR 0.804；global hit@1 0.435、MRR 0.514；decorator 组 0 回退；依赖 `jieba` / `rank-bm25`
-- **管理页导入改造已完成**：导入入口收敛为侧边栏唯一「📤 导入文件」；上传/入库进度改弹窗；问答页上传按钮已迁移删除（保留待审查面板）
-- **三页互通 + 切换动画已上线**：eval_dashboard 统一深色布局；common.js 导航淡出过渡
+- **pytest 69/69 全绿**（chunk_cache 27 + memory 18 + retrieval 5 + hybrid_retrieval 10 + rerank 4 + kg 5）
+- **重排已上线**：`bge-reranker-base` 交叉编码器，**加分微调**策略（实测直排会把融合排序的正确结果打乱：async_03 融合分第 1 被打到第 7）；配合**扩大召回**（无标签向量通道 top_k → top_k×5），filtered hit@1 0.783 → **0.826**、global hit@1 0.435 → **0.522**；模型缺失/失败静默降级
+- **知识图谱已上线**：元数据层（doc/topic/tag，零 LLM）+ 实体层（LLM 增量抽取，131 篇实测 726 三元组）；图谱 1259 节点 / 2202 边；检索第三路召回（实体/标签命中 → 关联文档加权进池）；前端图谱可视化页（Canvas 力导向 + 拖拽/hover/筛选）
+- **前端四页互通**：新增知识图谱页，纳入 common.js 导航体系
 
 ## 遗留事项（按优先级）
 
-1. **agent_confusion 组 5 例瓶颈**（agent_03/04、react_03、langchain_01/02）：整本书型 PDF chunk 向量分系统性偏低，BM25 翻不越恒定分差。建议：reranker（交叉编码器）或"仅整本 PDF 类"文档先验（需防误伤）
-2. **老代码限制**：splitter 超长段无硬切 / tool_agent 每问必跑一次 LLM / execute_python 非真沙箱（对外开放需 Docker）
-3. **路线图**：阶段 6 compiled_wiki / 阶段 7 有监督标签（样本 100+）/ 阶段 8 多知识库
+1. **agent_confusion 剩余 4 例**（agent_04、react_03、langchain_01/02）：整本书型 PDF 正确 chunk 即使扩召回后仍被相关笔记压过（hit@3 已 0.5，MRR 0.167）。下一步："仅整本 PDF 类"文档先验（需防误伤）或池再扩大
+2. **重排延迟**：bge-reranker-base 首次加载约数秒（约 1GB 模型）；CPU 打分 30 对约 3-5 秒。本地单用户够用；多并发场景可换小模型或降 top_n
+3. **实体抽取成本**：131 篇全量抽取约 10 分钟 + 少量 token 费用；已做增量（hash 对比），后续入库只抽新增
+4. **老代码限制**：splitter 超长段无硬切 / tool_agent 每问必跑一次 LLM / execute_python 非真沙箱（对外开放需 Docker）
+5. **路线图**：阶段 6 compiled_wiki / 阶段 7 有监督标签（样本 100+）/ 阶段 8 多知识库 / 图谱二跳扩展与 GraphRAG 上下文拼装
 
 ## 技术坑速查（勿再犯）
 
@@ -169,10 +180,19 @@ python tests/agent_eval.py                     # Agent 自动评测（50 例）
 
 ## 检索机制要点
 
-- `kb/storage/vector_store.py`：`query(question, topic="", top_k=0, tags=None)` 返回 `{text, source, topic, heading, tags, score}`
-- 双路：向量（bge 余弦，主）+ BM25（`_search_by_bm25` 保底 `bm25_top_k` 进候选池；`_rerank_by_bm25` 按"命中查询词数/总数 × boost"并入 score）
-- 配置 `recall {top_k: 4, score_threshold: 0.45, bm25_boost: 0.10, bm25_top_k: 10}`
+- `kb/storage/vector_store.py`：`query(question, topic="", top_k=0, tags=None)` 返回 `{text, source, topic, heading, tags, score, rerank_score?}`
+- 三路召回：向量（bge 余弦，主）+ BM25（`_search_by_bm25` 保底 `bm25_top_k` 进候选池；`_rerank_by_bm25` 按"命中查询词数/总数 × boost"并入 score）+ 图谱（`_search_by_graph`：问题命中实体/标签 → 关联文档片段加 `graph_boost` 进池）
+- 重排：`kb/rerank.py` 交叉编码器对融合排序后的候选池前 `rerank.top_n` 条打分，`rerank_score` 重排，不覆盖原 score；模型不可用静默降级
+- 配置 `recall {top_k: 4, score_threshold: 0.45, bm25_boost: 0.10, bm25_top_k: 10}` + `rerank {enabled, model, top_n: 20}` + `kg {enabled, graph_boost: 0.05, expand_top_n: 5}`
 - `_HAS_BM25=False` 时静默降级纯向量；35 标签词注入 jieba 用户词典
+
+## 知识图谱机制要点
+
+- `kb/kg/build.py`：元数据层从台账构建 doc/topic/tag 节点边（零 LLM）；实体层 `KG_EXTRACT_PROMPT` 抽 (head, rel, tail) 三元组，增量按 doc_meta hash 对比
+- `kb/kg/retrieve.py`：`expand_sources(question)` 问题命中 entity/tag 节点名 → 一跳（节点→文档）+ 二跳（实体关系邻居）拉关联文档
+- `kb/kg/store.py`：`knowledge/graph/kg.json` 持久化（nodes/edges/doc_meta）
+- API：`GET /api/graph` 读图谱 · `POST /api/graph/rebuild` 后台重建（可带 `extract_entities`）· `GET /api/graph/status` 轮询
+- 前端 `static/graph.html`：Canvas 力导向图（斥力/弹簧/引力/阻尼），类型筛选、拖拽、悬停高亮邻居 + tooltip
 
 ## 文档索引
 
