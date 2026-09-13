@@ -520,6 +520,17 @@ def api_graph_status():
         return dict(_GRAPH_STATE)
 
 
+@app.get("/api/tools")
+def api_tools():
+    """工具池：Agent 当前可用的工具清单 + 调用统计。"""
+    from kb.agents.tool_pool import get_pool
+    import kb.agents.tools  # noqa: F401 —— 触发工具注册（模块顶层 register 进池）
+    pool = get_pool()
+    stats = pool.stats()
+    return {"ok": True, "total": len(stats), "tools": stats,
+            "schema": pool.schemas()}
+
+
 # ===== 管理层接口 =====
 @app.get("/api/manage/stats")
 def api_manage_stats():

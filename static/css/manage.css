@@ -77,6 +77,27 @@
   font-size: 10.5px; padding: 0 5px; font-weight: 600;
 }
 
+/* ===== 工具池 ===== */
+.tool-pool { display: flex; flex-direction: column; gap: 8px; }
+.tool-item {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px; padding: 10px 14px;
+  transition: border-color .15s, background .15s;
+}
+.tool-item:hover { border-color: rgba(90, 162, 248, 0.45); background: rgba(47, 111, 237, 0.08); }
+.tool-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.tool-name {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13.5px; font-weight: 600; color: #8ec5ff;
+}
+.tool-calls {
+  margin-left: auto; font-size: 11.5px; color: var(--text-secondary, #888);
+  background: rgba(255, 255, 255, 0.06); padding: 2px 8px; border-radius: 10px;
+}
+.tool-desc { font-size: 12.5px; color: var(--text-secondary, #aaa); line-height: 1.5; }
+.empty-hint { font-size: 13px; color: var(--text-secondary, #888); padding: 10px 2px; }
+
 /* ===== 文档表格 ===== */
 .doc-toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
 .doc-search {

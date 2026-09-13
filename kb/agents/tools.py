@@ -1,5 +1,5 @@
-"""工具注册表：Agent 可调用的工具（Function Calling）。
-每个工具 = 一个函数 + 一份 JSON Schema 描述（告诉 LLM 这个工具怎么用）。
+"""工具池：Agent 可调用的工具（Function Calling）。
+工具统一注册进 ToolPool（kb/agents/tool_pool.py）：name/description/schema/执行函数/调用统计。
 迁移自旧项目 app/tools.py，检索改用 kb.kb_rag.query。"""
 import json
 
@@ -8,6 +8,7 @@ from ..storage.vector_store import query
 from ..web_search import web_search as _ws
 from ..prompts import TOOL_ASSISTANT_PROMPT
 from ..config import agent_cfg
+from .tool_pool import get_pool
 
 
 # 报错详情截断长度（防止子进程刷屏污染回答）
@@ -65,66 +66,94 @@ def execute_python(code: str, timeout: float = 5.0) -> str:
         return f"运行超时：超过 {timeout}s（已终止）"
 
 
-
 def web_search_tool(query: str) -> str:
     """联网搜索，返回结果标题列表。"""
     results = _ws(query)
     return "\n".join(results) if results else "无返回内容"
 
 
-# ---------- 工具注册表：给 LLM 看的"工具说明书" ----------
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_knowledge",
-            "description": "在个人知识库中检索与问题相关的笔记片段。参数 topic 可限定领域/分类（如 notes_draft）。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "检索关键词/问题"},
-                    "topic": {"type": "string", "description": "领域名（可选）"},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "execute_python",
-            "description": "运行一段 Python 代码并返回输出。用于验证代码、算数、处理数据。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "code": {"type": "string", "description": "要执行的 Python 代码"},
-                },
-                "required": ["code"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "web_search_tool",
-            "description": "联网搜索当前问题，返回相关网页标题。用于知识库没有的内容。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "搜索关键词"},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-]
+def search_graph(query_text: str) -> str:
+    """在知识图谱中查找与问题关联的文档与实体关系。
+    知识库检索的是"内容片段"，图谱检索的是"笔记间的关系"：
+    问题命中实体/标签（如 LangGraph、装饰器）时，返回它关联的文档清单，
+    帮 LLM 找出跨文档的关联线索（比如"LangGraph 相关笔记有哪些"）。"""
+    from ..kg.retrieve import expand_sources
+    from ..kg import store
+    if not query_text.strip():
+        return "查询内容为空"
+    g = store.load()
+    if not g["nodes"]:
+        return "知识图谱尚未构建（运行 scripts/build_graph.py 或在前端点「重建图谱」）"
+    sources = expand_sources(query_text)
+    if not sources:
+        return "图谱中没有与问题直接关联的文档（可改用知识库检索）"
+    terms = list(dict.fromkeys(
+        nd["name"] for nd in g["nodes"]
+        if nd.get("type") in ("entity", "tag")
+        and len(str(nd.get("name", ""))) >= 2
+        and nd["name"] in query_text
+    ))
+    lines = []
+    if terms:
+        lines.append("问题命中的图谱实体/标签: " + "、".join(terms[:10]))
+    lines.append("关联文档:")
+    lines += [f" - {s}" for s in sources]
+    return "\n".join(lines)
 
-# 工具名 → 执行函数 的映射（执行器）
-TOOL_FUNCS = {
-    "search_knowledge": search_knowledge,
-    "execute_python": execute_python,
-    "web_search_tool": web_search_tool,
-}
+
+# ---------- 工具池注册：新增工具在这里加一行 ----------
+# ToolPool 统一注册（schema 给 LLM 看 + 函数实际执行 + 调用统计），
+# 工具名/描述/参数/执行函数/分类 五要素齐全，前端可枚举展示。
+_pool = get_pool()
+
+_pool.register(
+    "search_knowledge",
+    "在个人知识库中检索与问题相关的笔记片段。参数 topic 可限定领域/分类。",
+    {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "检索关键词/问题"},
+            "topic": {"type": "string", "description": "领域名（可选）"},
+        },
+    },
+    search_knowledge,
+    category="检索", required=["query"],
+)
+_pool.register(
+    "execute_python",
+    "运行一段 Python 代码并返回输出。用于验证代码、算数、处理数据。",
+    {
+        "type": "object",
+        "properties": {"code": {"type": "string", "description": "要执行的 Python 代码"}},
+    },
+    execute_python,
+    category="执行", required=["code"],
+)
+_pool.register(
+    "web_search_tool",
+    "联网搜索当前问题，返回相关网页标题。用于知识库没有的内容。",
+    {
+        "type": "object",
+        "properties": {"query": {"type": "string", "description": "搜索关键词"}},
+    },
+    web_search_tool,
+    category="检索", required=["query"],
+)
+_pool.register(
+    "search_graph",
+    "在知识图谱中查找与问题关联的文档与实体关系。用于找笔记之间的关联。",
+    {
+        "type": "object",
+        "properties": {"query_text": {"type": "string", "description": "要查关联的问题/实体"}},
+    },
+    search_graph,
+    category="检索", required=["query_text"],
+)
+
+# ---------- 兼容旧引用：TOOLS / TOOL_FUNCS 由池派生 ----------
+# （graph.py 等仍按原接口 import；新代码建议直接用 get_pool()）
+TOOLS = _pool.schemas()
+TOOL_FUNCS = {t.name: t.func for t in _pool.list_all()}
 
 
 # ---------- Agent 工具主循环（Function Calling 核心） ----------
@@ -136,8 +165,9 @@ def run_agent_with_tools(question: str, max_rounds: int = 0) -> str:
         {"role": "user", "content": question},
     ]
     llm = LLMClient()
+    pool = get_pool()
     for _ in range(max_rounds):
-        msg = llm.chat_with_tools(messages, TOOLS)
+        msg = llm.chat_with_tools(messages, pool.schemas())
         if msg is None or not getattr(msg, "tool_calls", None):
             return msg.content if msg is not None else "（mock 模式：配置真实模型后才能演示工具调用）"
         messages.append({
@@ -156,10 +186,7 @@ def run_agent_with_tools(question: str, max_rounds: int = 0) -> str:
             except Exception:
                 args = {}
             print(f"  [工具] 调用: {name} {args}")
-            try:
-                result = TOOL_FUNCS[name](**args)
-            except Exception as e:
-                result = f"工具执行失败: {type(e).__name__}: {e}"
+            result = pool.call(name, **args)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
     return "（达到工具轮次上限，未能完成回答）"
 

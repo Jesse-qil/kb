@@ -561,6 +561,34 @@ function loadAll() {
   loadStats();
   searchDocs("");
   loadTags();
+  loadTools();
+}
+
+/* ===== 工具池 ===== */
+async function loadTools() {
+  const box = document.getElementById("toolPool");
+  if (!box) return;
+  try {
+    const r = await fetch("/api/tools");
+    const d = await r.json();
+    if (!d.ok || !d.tools || !d.tools.length) {
+      box.innerHTML = '<div class="empty-hint">工具池为空</div>';
+      return;
+    }
+    box.innerHTML = d.tools.map(t => {
+      const badge = t.category ? `<span class="tag-chip">${t.category}</span>` : "";
+      const calls = t.calls || 0;
+      return `<div class="tool-item">
+        <div class="tool-head">
+          <code class="tool-name">${t.name}</code>${badge}
+          <span class="tool-calls">已调用 ${calls} 次</span>
+        </div>
+        <div class="tool-desc">${t.description}</div>
+      </div>`;
+    }).join("");
+  } catch (e) {
+    box.innerHTML = '<div class="empty-hint">工具池加载失败：' + (e.message || e) + '</div>';
+  }
 }
 
 /* ===== 启动 ===== */
@@ -571,3 +599,4 @@ document.getElementById("docSearch").addEventListener("keydown", e => {
 loadStats();
 searchDocs("");
 loadTags();
+loadTools();
