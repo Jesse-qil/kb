@@ -24,7 +24,7 @@ except Exception:
     BM25Okapi = None
     _HAS_BM25 = False
 
-from ..config import KNOWLEDGE_DIR, chroma_dir, recall_cfg
+from ..config import KNOWLEDGE_DIR, chroma_dir, recall_cfg, rerank_cfg, kg_cfg
 from ..embedding import embed_query
 
 _COLLECTION = "notes"
@@ -305,6 +305,55 @@ def _search_by_bm25(question: str, k: int, topic: str = "") -> list[dict]:
     return out
 
 
+def _search_by_graph(question: str, topic: str = "") -> list[dict]:
+    """图谱关联文档通道：问题命中实体/标签 → 关联文档片段保底进池。
+    每篇关联文档取 1 个代表片段，score=graph_boost（命中即加，保证进前排）。
+    图谱不存在/无命中 → 空列表，不影响主链路。"""
+    if not question:
+        return []
+    try:
+        from ..kg.retrieve import expand_sources
+        from ..kg import store as kg_store
+        from ..config import kg_cfg
+    except Exception:
+        return []
+    if not kg_store.graph_file().exists():
+        return []
+    try:
+        sources = expand_sources(question, topic=topic)
+    except Exception:
+        return []
+    if not sources:
+        return []
+    col = _collection()
+    if col is None:
+        return []
+    where = {"source": {"$in": sources}}
+    if topic:
+        where = {"$and": [where, {"topic": topic}]}
+    try:
+        data = col.get(where=where, include=["documents", "metadatas"])
+    except Exception:
+        return []
+    ids = data.get("ids") or []
+    if not ids:
+        return []
+    boost = float(kg_cfg().get("graph_boost", 0.05))
+    picked: dict[str, dict] = {}
+    for i in range(len(ids)):
+        md = data["metadatas"][i]
+        s = md.get("source", "")
+        if s in picked:
+            continue
+        picked[s] = {
+            "text": data["documents"][i], "source": s,
+            "topic": md.get("topic", ""), "heading": md.get("heading", ""),
+            "tags": _tags_list(md), "score": round(boost, 4),
+            "from_graph": True,
+        }
+    return list(picked.values())
+
+
 def _rerank_by_bm25(hits: list[dict], bm25, tokens: list[str]) -> None:
     """BM25 词命中加权：按『命中不同查询词数 / 查询词总数』加分并重排。
     加分 = boost × ratio。对词频/文档长度不敏感：两篇同词文档加分相同，排序仍由
@@ -408,7 +457,10 @@ def query(question: str, topic: str = "", top_k: int = 0,
     合并后按标签重叠加分重排（软加权：归错目录/标签不全也不会丢内容）。"""
     col = _collection()
     k = top_k or recall_cfg()["top_k"]
-    fetch = k * 5 if tags else k
+    # 召回量统一扩到 k*5（有无标签都扩）：
+    # 整本书型 PDF 的正确答案 chunk 向量分系统性偏低，只取 top_k 会连候选池都进不去，
+    # reranker 无米下锅。多召回 5 倍候选 → 融合排序 → rerank 精细重排，瓶颈才可治。
+    fetch = k * 5
     pool: dict = {}
 
     if col is not None:
@@ -463,12 +515,31 @@ def query(question: str, topic: str = "", top_k: int = 0,
                 bk = int(recall_cfg().get("bm25_top_k", 10))
                 _merge_hits(_search_by_bm25(question, bk, topic=topic), pool)
 
+    # ---- 图谱关联文档通道：实体/标签命中 → 关联文档片段进池（带 graph_boost）----
+    # 与 BM25 同构的第三路召回：问题里出现图谱实体/标签名（如"LangGraph"）时，
+    # 直接拉出它关联的文档，标签对但向量分排不进前排的片段不会漏。
+    if kg_cfg().get("enabled", True):
+        try:
+            _merge_hits(_search_by_graph(question, topic=topic), pool)
+        except Exception:
+            pass
+
     hits = list(pool.values())
     if tags:
         _rerank_by_tags(hits, tags)
     if bm25 is not None and bm25_tokens:
         _rerank_by_bm25(hits, bm25, bm25_tokens)
     hits.sort(key=lambda h: -h["score"])
+
+    # ---- 重排（Reranker）：交叉编码器精细打分，治恒差分差瓶颈 ----
+    # 在融合排序之后、截断之前执行：只重排候选池前 rerank_top_n 条。
+    # 模型不可用/打分失败时 rerank() 原样返回，不影响主链路。
+    if rerank_cfg().get("enabled", True):
+        try:
+            from ..rerank import rerank as _rerank
+            hits = _rerank(question, hits)
+        except Exception:
+            pass
     return hits[:k]
 
 

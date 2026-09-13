@@ -23,6 +23,25 @@ recall:
                            # 调参依据：benchmark_retrieval hit@1 0.609→0.783（0.05~0.15 效果相同，取 0.10 保守值）
   bm25_top_k: 10           # BM25 通道保底进候选池的片段数（防止关键词命中但向量分低被漏掉）
 
+# ===== 重排（Reranker） =====
+# 交叉编码器对 (query, 候选片段) 精细打分，重排融合排序后的候选池。
+# 治"整本书型 PDF 向量分系统性偏低 / BM25 翻不越恒定分差"两类瓶颈（agent_confusion 组）。
+# 模型缺失/加载失败 → 自动降级为原融合排序，不影响主链路。
+rerank:
+  enabled: true            # 重排开关：false 退化为原融合排序
+  model: "BAAI/bge-reranker-base"   # 中文交叉编码器（首次使用自动下载，约 1GB）
+  top_n: 30                # 参与重排的候选池上限（只重排前 N 条，控制延迟）
+  weight: 0.15             # 加分权重：以池内最低 rerank 分为基线，分差×权重并入融合分
+
+# ===== 知识图谱（KG） =====
+# 两层图谱：元数据层（文档-领域-标签，零 LLM）+ 实体层（LLM 增量抽取三元组）。
+# 检索增强：问题命中实体/标签 → 关联文档片段加权进候选池。
+kg:
+  enabled: true            # 图谱检索增强开关
+  graph_boost: 0.05        # 图谱关联文档片段的加分（命中即加，保证进前排）
+  expand_top_n: 5          # 问题扩展出的关联文档数上限
+  extract_entities: true   # 构建时是否 LLM 抽取实体三元组（增量，只处理新增/变化文档）
+
 # ===== 大模型配置（OpenAI 兼容接口，多提供商可切换） =====
 # provider: deepseek / openai / siliconflow / ollama / mock / auto
 # auto = 自动识别 .env 里配了哪家 key 就用哪家，都没有 → mock（假回答跑通流程）

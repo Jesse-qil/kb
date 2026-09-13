@@ -18,6 +18,16 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
+@pytest.fixture(autouse=True)
+def disable_rerank_and_kg(monkeypatch):
+    """测试环境默认关闭 rerank 与图谱通道：
+    不依赖真实交叉编码器模型 / 真实图谱文件，保证检索测试走确定性融合排序。
+    """
+    from kb import config
+    monkeypatch.setitem(config.CONFIG["rerank"], "enabled", False)
+    monkeypatch.setitem(config.CONFIG["kg"], "enabled", False)
+
+
 @pytest.fixture
 def isolated_cache(tmp_path, monkeypatch):
     """把 chunk_cache 所有文件操作重定向到 tmp_path/knowledge/。

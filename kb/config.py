@@ -25,6 +25,10 @@ _DEFAULT_CONFIG = {
     "embedding": {"model_name": "BAAI/bge-small-zh-v1.5"},
     "recall": {"top_k": 4, "score_threshold": 0.45,
                "bm25_boost": 0.10, "bm25_top_k": 10},
+    "rerank": {"enabled": True, "model": "BAAI/bge-reranker-base",
+               "top_n": 30, "weight": 0.15},
+    "kg": {"enabled": True, "graph_boost": 0.05, "expand_top_n": 5,
+           "extract_entities": True},
     "llm": {"provider": "auto", "temperature": 0.3},
     "server": {"host": "127.0.0.1", "port": 8000, "reload": True},
     "session": {"max_turns": 6},
@@ -96,6 +100,14 @@ def split_cfg() -> dict:
 
 def recall_cfg() -> dict:
     return CONFIG["recall"]
+
+
+def rerank_cfg() -> dict:
+    return CONFIG["rerank"]
+
+
+def kg_cfg() -> dict:
+    return CONFIG["kg"]
 
 
 def embedding_cfg() -> dict:
