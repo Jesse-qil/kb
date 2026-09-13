@@ -13,12 +13,13 @@
     tag: "#F4B393",
     entity: "#94D8C3",
   };
-  var TYPE_RADIUS = { doc: 9, topic: 13, tag: 7, entity: 6 };
+  var TYPE_RADIUS = { doc: 9, topic: 16, tag: 6, entity: 5 };
   var TYPE_LABEL = { doc: "文档", topic: "领域", tag: "标签", entity: "实体" };
 
   var canvas, ctx, wrap, tip;
   var nodes = [], edges = [];
-  var visibleTypes = { doc: true, topic: true, tag: true, entity: true };
+  // 默认只显示主干（文档/领域/标签）；实体层 1008 个节点按需勾选开启
+  var visibleTypes = { doc: true, topic: true, tag: true, entity: false };
   var layout = [];           // {x, y, vx, vy, r, color, name, type, topic, deg}
   var layoutById = {};
   var W = 0, H = 0, dpr = 1;
@@ -28,7 +29,11 @@
 
   function $(id) { return document.getElementById(id); }
 
+  var inited = false;
+
   function init() {
+    if (inited) return;   // DOMContentLoaded 与 readyState 双触发防重入
+    inited = true;
     canvas = $("graphCanvas");
     wrap = $("graphWrap");
     tip = $("gTip");
@@ -52,6 +57,14 @@
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     canvas.addEventListener("mouseleave", function () { hoverIdx = -1; });
+
+    // 从后台切回 / 重新聚焦 → 立即重画（rAF 在后台被暂停，回来要恢复）
+    window.addEventListener("focus", function () {
+      if (layout.length && !running) settle(false);
+    });
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && layout.length && !running) settle(false);
+    });
 
     loadGraph();
   }
@@ -86,7 +99,8 @@
         edges = data.edges || [];
         renderStats(data.meta || {});
         applyFilter();
-        setStatus("节点 " + nodes.length + " · 边 " + edges.length);
+        setStatus("当前显示 " + layout.length + " 节点 · " + edges.length +
+                  " 边（实体层默认隐藏，勾选「实体」查看完整图谱）");
       })
       .catch(function (e) {
         toast("图谱加载失败: " + e, "error");
@@ -131,15 +145,44 @@
 
   function buildLayout(visNodes, visEdges) {
     var n = visNodes.length;
+    // 分簇初始位置：领域节点放圆周 → 文档挂自己领域扇区 → 标签/实体放内环
+    var rad = Math.min(W, H) * 0.36;
+    var cx = W / 2, cy = H / 2;
+    var topicAng = {};   // topic 名 → 扇区角度
+    var topicIdx = 0, topicCount = 0;
+    visNodes.forEach(function (nd) {
+      if (nd.type === "topic") topicCount++;
+    });
+    function hashAng(s) {
+      var h = 0;
+      for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
+      return (h / 100000) * Math.PI * 2;
+    }
     layout = visNodes.map(function (nd, i) {
-      // 初始位置：环形分布（避免随机重叠）
-      var ang = (i / Math.max(n, 1)) * Math.PI * 2;
-      var rad = Math.min(W, H) * 0.32;
+      var p;
+      if (nd.type === "topic") {
+        // 领域：圆周均布
+        var ang = (i / Math.max(topicCount, 1)) * Math.PI * 2 - Math.PI / 2;
+        topicAng[nd.name] = ang;
+        p = { x: cx + Math.cos(ang) * rad, y: cy + Math.sin(ang) * rad };
+      } else if (nd.type === "doc" && nd.topic) {
+        // 文档：挂到所属领域扇区附近（同一领域聚成一小簇）
+        var a = (topicAng[nd.topic] !== undefined) ? topicAng[nd.topic] : hashAng(nd.topic || "");
+        var rr = rad * (0.42 + Math.random() * 0.3);
+        p = {
+          x: cx + Math.cos(a + (Math.random() - 0.5) * 0.55) * rr,
+          y: cy + Math.sin(a + (Math.random() - 0.5) * 0.55) * rr,
+        };
+      } else {
+        // 标签 / 实体：内环随机分布
+        var a2 = Math.random() * Math.PI * 2;
+        var rr2 = rad * (0.12 + Math.random() * 0.3);
+        p = { x: cx + Math.cos(a2) * rr2, y: cy + Math.sin(a2) * rr2 };
+      }
       return {
         id: nd.id, name: nd.name, type: nd.type, topic: nd.topic,
         r: TYPE_RADIUS[nd.type] || 6, color: TYPE_COLOR[nd.type] || "#999",
-        x: W / 2 + Math.cos(ang) * rad + (Math.random() - 0.5) * 30,
-        y: H / 2 + Math.sin(ang) * rad + (Math.random() - 0.5) * 30,
+        x: p.x, y: p.y,
         vx: 0, vy: 0, deg: 0,
       };
     });
@@ -166,6 +209,10 @@
       draw();
       return;
     }
+    // 关键：先静默收敛 + 立即画一帧，保证首屏必有内容
+    // （requestAnimationFrame 在无焦点/后台窗口会被暂停，动画可等，图不能等）
+    for (var i = 0; i < 150; i++) step();
+    draw();
     if (raf) cancelAnimationFrame(raf);
     running = true;
     var last = performance.now();
@@ -188,11 +235,13 @@
   function step(dt) {
     var n = layout.length;
     if (!n) return;
+    // dt 兜底：无参调用（同步预收敛）时按 1 帧推进，防止坐标变 NaN
+    if (typeof dt !== "number" || !isFinite(dt)) dt = 1;
     var cx = W / 2, cy = H / 2;
     var kRep = 4200 * Math.sqrt(n) / Math.max(n, 10);   // 斥力强度随规模自适应
-    var kSpr = 0.02, rest = 70;
-    var kGrav = 0.012;
-    var minD = 14;
+    var kSpr = 0.02, rest = 100;                        // 弹簧更长 → 连边拉开，簇更清晰
+    var kGrav = 0.006;                                  // 中心引力弱 → 不被吸成一团
+    var minD = 12;
 
     // 斥力：O(n²)
     for (var i = 0; i < n; i++) {
@@ -262,8 +311,8 @@
       var na = layoutById[e.src], nb = layoutById[e.dst];
       if (!na || !nb) return;
       var active = hl[e.src] && hl[e.dst];
-      ctx.strokeStyle = active ? "rgba(148,216,195,0.65)" : "rgba(255,255,255,0.10)";
-      ctx.lineWidth = active ? 1.6 : 1;
+      ctx.strokeStyle = active ? "rgba(148,216,195,0.7)" : "rgba(255,255,255,0.055)";
+      ctx.lineWidth = active ? 1.6 : 0.8;
       ctx.beginPath();
       ctx.moveTo(na.x, na.y);
       ctx.lineTo(nb.x, nb.y);
@@ -286,8 +335,8 @@
       ctx.lineWidth = isHover ? 1.5 : 1;
       ctx.stroke();
 
-      // 文字：领域常显；hover 节点 / 大节点显示
-      if (nd.type === "topic" || isHover || (nd.type === "doc" && nd.deg >= 6)) {
+      // 文字：领域常显；hover 节点 / 高关联文档（deg>=8）显示，避免文字打架
+      if (nd.type === "topic" || isHover || (nd.type === "doc" && nd.deg >= 8)) {
         ctx.fillStyle = isHover ? "#ffffff" : "rgba(230,236,245,0.85)";
         ctx.font = (isHover ? "600 " : "") + "11px 'Microsoft YaHei', sans-serif";
         ctx.fillText(nd.name, nd.x + nd.r + 5, nd.y + 4);
