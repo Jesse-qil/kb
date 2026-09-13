@@ -49,6 +49,7 @@
       cb.addEventListener("change", function () {
         visibleTypes[cb.getAttribute("data-t")] = cb.checked;
         applyFilter();
+        setStatus("当前显示 " + layout.length + " 节点 · " + edges.length + " 边");
       });
     });
 
@@ -205,24 +206,26 @@
   function settle(animate) {
     if (!animate) {
       // 静默收敛几轮后直接画
-      for (var i = 0; i < 200; i++) step();
+      for (var i = 0; i < 200; i++) step(1);
       draw();
       return;
     }
     // 关键：先静默收敛 + 立即画一帧，保证首屏必有内容
     // （requestAnimationFrame 在无焦点/后台窗口会被暂停，动画可等，图不能等）
-    for (var i = 0; i < 150; i++) step();
+    for (var i = 0; i < 150; i++) step(1);
     draw();
     if (raf) cancelAnimationFrame(raf);
     running = true;
     var last = performance.now();
+    // 帧数随规模自适应：节点越多动画越短，避免长时间满载卡交互
+    var maxFrames = layout.length > 600 ? 350 : (layout.length > 300 ? 500 : 900);
     function loop(now) {
       var dt = Math.min(now - last, 50) / 16.7;   // 归一化到 60fps
       last = now;
       step(dt);
       draw();
       settled++;
-      if (settled < 900) {
+      if (settled < maxFrames) {
         raf = requestAnimationFrame(loop);
       } else {
         running = false;
@@ -243,20 +246,37 @@
     var kGrav = 0.006;                                  // 中心引力弱 → 不被吸成一团
     var minD = 12;
 
-    // 斥力：O(n²)
+    // 斥力：网格空间分区（只算同格 + 相邻 8 格），O(n²) → O(n·k)
+    // 全量 1259 节点时每帧从 158 万对降到几万对，不再卡死主线程
+    var cell = Math.max(70, minD * 4);
+    var grid = {};
+    for (var gi = 0; gi < n; gi++) {
+      var gn = layout[gi];
+      var gk = Math.floor(gn.x / cell) + "," + Math.floor(gn.y / cell);
+      (grid[gk] = grid[gk] || []).push(gi);
+    }
     for (var i = 0; i < n; i++) {
       var a = layout[i];
-      for (var j = i + 1; j < n; j++) {
-        var b = layout[j];
-        var dx = a.x - b.x, dy = a.y - b.y;
-        var d2 = dx * dx + dy * dy;
-        if (d2 < 1) { dx = (Math.random() - 0.5) * 2; dy = (Math.random() - 0.5) * 2; d2 = 1; }
-        var d = Math.sqrt(d2);
-        if (d < minD) { d = minD; d2 = d * d; }
-        var f = kRep / d2;
-        var fx = (dx / d) * f, fy = (dy / d) * f;
-        a.vx += fx; a.vy += fy;
-        b.vx -= fx; b.vy -= fy;
+      var ax = Math.floor(a.x / cell), ay = Math.floor(a.y / cell);
+      for (var ox = -1; ox <= 1; ox++) {
+        for (var oy = -1; oy <= 1; oy++) {
+          var bucket = grid[(ax + ox) + "," + (ay + oy)];
+          if (!bucket) continue;
+          for (var bi = 0; bi < bucket.length; bi++) {
+            var j = bucket[bi];
+            if (j <= i) continue;   // 每对只算一次
+            var b = layout[j];
+            var dx = a.x - b.x, dy = a.y - b.y;
+            var d2 = dx * dx + dy * dy;
+            if (d2 < 1) { dx = (Math.random() - 0.5) * 2; dy = (Math.random() - 0.5) * 2; d2 = 1; }
+            var d = Math.sqrt(d2);
+            if (d < minD) { d = minD; d2 = d * d; }
+            var f = kRep / d2;
+            var fx = (dx / d) * f, fy = (dy / d) * f;
+            a.vx += fx; a.vy += fy;
+            b.vx -= fx; b.vy -= fy;
+          }
+        }
       }
     }
 
@@ -306,18 +326,35 @@
       });
     }
 
-    // 边
-    edges.forEach(function (e) {
+    // 边：普通边一次 path 批量画（全量 2202 条也只 2 次 stroke，不卡）
+    var hasHL = false;
+    ctx.strokeStyle = "rgba(255,255,255,0.055)";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    for (var k = 0; k < edges.length; k++) {
+      var e = edges[k];
       var na = layoutById[e.src], nb = layoutById[e.dst];
-      if (!na || !nb) return;
-      var active = hl[e.src] && hl[e.dst];
-      ctx.strokeStyle = active ? "rgba(148,216,195,0.7)" : "rgba(255,255,255,0.055)";
-      ctx.lineWidth = active ? 1.6 : 0.8;
-      ctx.beginPath();
+      if (!na || !nb) continue;
+      if (hl[e.src] && hl[e.dst]) { hasHL = true; continue; }
       ctx.moveTo(na.x, na.y);
       ctx.lineTo(nb.x, nb.y);
+    }
+    ctx.stroke();
+    // 高亮边单独一层（hover 时）
+    if (hasHL) {
+      ctx.strokeStyle = "rgba(148,216,195,0.7)";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for (var k2 = 0; k2 < edges.length; k2++) {
+        var e2 = edges[k2];
+        var na2 = layoutById[e2.src], nb2 = layoutById[e2.dst];
+        if (!na2 || !nb2) continue;
+        if (!(hl[e2.src] && hl[e2.dst])) continue;
+        ctx.moveTo(na2.x, na2.y);
+        ctx.lineTo(nb2.x, nb2.y);
+      }
       ctx.stroke();
-    });
+    }
 
     // 节点
     layout.forEach(function (nd, i) {
@@ -378,10 +415,14 @@
     var p = canvasPos(ev);
     if (dragIdx >= 0) {
       dragX = p.x; dragY = p.y;
+      if (!running) draw();   // 动画已停：拖拽即时重绘，不跑物理
       return;
     }
     var i = pick(p.x, p.y);
-    hoverIdx = i;
+    if (i !== hoverIdx) {
+      hoverIdx = i;
+      if (!running) draw();   // 动画已停：hover 即时高亮
+    }
     if (i >= 0) {
       var nd = layout[i];
       tip.style.display = "block";
@@ -398,6 +439,7 @@
   }
 
   function onUp() {
+    if (dragIdx >= 0 && !running) settle(false);  // 松手后布局重新收敛
     dragIdx = -1;
     canvas.classList.remove("dragging");
   }
