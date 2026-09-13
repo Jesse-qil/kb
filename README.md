@@ -14,7 +14,7 @@
 - 🛠️ **Function Calling**：知识库检索 / 子进程安全执行 Python / 联网搜索，LLM 自主决定调用
 - 🧠 **长期记忆**：跨会话用户画像（facts / prefs / goals）自动提炼并回灌
 - 🌐 **Web 四页互通**：问答 / 知识库管理 / 知识图谱 / 评估仪表盘，SSE 流式输出，导入进度弹窗
-- ✅ **可评测**：pytest 69/69 全绿，自带检索 benchmark 与 Agent 自动评测框架
+- ✅ **可评测**：pytest 75/75 全绿，自带检索 benchmark 与 Agent 自动评测框架
 
 ## 架构
 
@@ -84,23 +84,25 @@ python -m kb.cli list                   # 查看库中文档
 
 > 向量化使用本地 `BAAI/bge-small-zh-v1.5` 模型，全程离线免费；仅 LLM 问答需要 API key。
 
-## 检索效果（23 例基准，`tests/benchmark_retrieval.py`）
+## 检索效果（23 例基准，`tests/benchmark_retrieval.py`，2026-09-13）
 
 | 指标 | 纯向量基线 | 混合检索 | 三路召回 + 重排（当前） |
 |---|---|---|---:|
-| filtered hit@1 | 0.609 | 0.783 | **0.826**（+5.5%） |
-| filtered MRR | — | 0.804 | **0.841** |
-| global hit@1 | 0.348 | 0.435 | **0.522**（+20%） |
-| global MRR | — | 0.514 | **0.580** |
+| filtered hit@1 | 0.609 | 0.783 | **0.913**（+16%） |
+| filtered MRR | — | 0.804 | **0.928** |
+| filtered Recall@5 | — | — | **0.957** |
+| global hit@1 | 0.348 | 0.435 | **0.652**（+30%） |
+| global MRR | — | 0.514 | **0.696** |
+| global Recall@5 | — | — | **0.783** |
 
-> 关键改进：扩大召回（无标签时向量通道也从 top_k 扩到 top_k×5，让整本书型 PDF 的正确 chunk 先进候选池）+ 交叉编码器加分微调（以池内最低分为基线，分差×权重并入融合分，不颠覆融合排序）。async 混淆组 100% 命中，agent_confusion 组 MRR 从 0 → 0.167（正确 chunk 已能进前 3）。
+> 关键改进：① 扩大召回（无标签时向量通道 top_k×5 → **top_k×8**，BM25 10→30，rerank 窗口 30→50，让整本书型 PDF 的正确 chunk 先进候选池）；② 交叉编码器加分微调（以池内最低分为基线，分差×权重 0.25 并入融合分，不颠覆融合排序）；③ **benchmark 标注有效性校验**（全文扫描确认 4 个混淆用例的期望源内容真实存在，修正无效标注）。详情见 `docs/开发手册.md` 与 `docs/踩坑手册.md`。
 
 ## Agent 评测（50 例，`tests/agent_eval.py`）
 
 - 来源命中率（source_hit_rate）：**84.6%**
 - RAG 类回答命中率：**97.4%**
 - 工具判定精确率 / 召回率：**100% / 100%**
-- 测试基线：**pytest 60/60 全绿**
+- 测试基线：**pytest 75/75 全绿**
 
 ## 技术栈
 
@@ -129,7 +131,7 @@ kb-v2/
 │   ├─ rerank.py           #   交叉编码器重排（懒加载 + 静默降级）
 │   └─ embedding.py llm.py prompts.py memory.py web_search.py config.py
 ├─ static/                 # 前端四页（问答 / 管理 / 知识图谱 / 评估仪表盘）
-├─ tests/                  # pytest 69 例 + 检索 benchmark + Agent 评测
+├─ tests/                  # pytest 75 例 + 检索 benchmark + Agent 评测 + Agent 评测
 ├─ scripts/                # 运维脚本（build_graph / clear_chroma 等）
 ├─ knowledge/              # 数据层（raw 原始笔记 / 台账 / 图谱 / 向量库，均可重建）
 ├─ person_document/        # 项目文档（面试八股深挖.md 公开；其余本地维护）
@@ -140,7 +142,7 @@ kb-v2/
 ## 测试与评测
 
 ```bash
-python -m pytest -ra -q                        # 69/69 全绿
+python -m pytest -ra -q                        # 75/75 全绿
 python tests/benchmark_retrieval.py --no-ingest  # 检索 benchmark（重排开启时含模型加载）
 python scripts/build_graph.py                  # 构建知识图谱（--entities 加 LLM 实体抽取）
 python tests/agent_eval.py                     # Agent 自动评测（50 例）
@@ -154,7 +156,7 @@ python tests/agent_eval.py                     # Agent 自动评测（50 例）
 
 ## 当前状态
 
-- **pytest 69/69 全绿**（chunk_cache 27 + memory 18 + retrieval 5 + hybrid_retrieval 10 + rerank 4 + kg 5）
+- **pytest 75/75 全绿**（chunk_cache 27 + memory 18 + retrieval 5 + hybrid_retrieval 10 + rerank 4 + kg 5 + tool_pool 6）
 - **重排已上线**：`bge-reranker-base` 交叉编码器，**加分微调**策略（实测直排会把融合排序的正确结果打乱：async_03 融合分第 1 被打到第 7）；配合**扩大召回**（无标签向量通道 top_k → top_k×5），filtered hit@1 0.783 → **0.826**、global hit@1 0.435 → **0.522**；模型缺失/失败静默降级
 - **知识图谱已上线**：元数据层（doc/topic/tag，零 LLM）+ 实体层（LLM 增量抽取，131 篇实测 726 三元组）；图谱 1259 节点 / 2202 边；检索第三路召回（实体/标签命中 → 关联文档加权进池）；前端图谱可视化页（Canvas 力导向 + 拖拽/hover/筛选）
 - **前端四页互通**：新增知识图谱页，纳入 common.js 导航体系

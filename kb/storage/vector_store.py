@@ -460,7 +460,7 @@ def query(question: str, topic: str = "", top_k: int = 0,
     # 召回量统一扩到 k*5（有无标签都扩）：
     # 整本书型 PDF 的正确答案 chunk 向量分系统性偏低，只取 top_k 会连候选池都进不去，
     # reranker 无米下锅。多召回 5 倍候选 → 融合排序 → rerank 精细重排，瓶颈才可治。
-    fetch = k * 5
+    fetch = k * 8
     pool: dict = {}
 
     if col is not None:

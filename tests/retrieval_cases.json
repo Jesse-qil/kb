@@ -93,9 +93,10 @@
   {
     "id": "agent_04",
     "question": "LangGraph 多 Agent",
-    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "expected_source": "AI-Agent/W07-多Agent协作.md",
     "topic": "AI-Agent",
-    "group": "agent"
+    "group": "agent",
+    "note": "原标 PDF 'langgraph' 仅 3 处；W07 有 '## 5. LangGraph 多 Agent 模式 ### 5.1 Supervisor 模式'"
   },
   {
     "id": "agent_05",
@@ -123,26 +124,26 @@
   {
     "id": "react_03",
     "question": "ReAct prompt 怎么写",
-    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "expected_source": "AI-Agent/W02-Prompt工程进阶.md",
     "topic": "AI-Agent",
     "group": "react_confusion",
-    "note": "ReAct prompt 是 Agent 思考模板"
+    "note": "原标 PDF 无 'ReAct prompt'（ReAct 25 处均为目录/泛述）；W02 有 '## 7. ReAct 模式' 含 Thought/Action/Observation prompt 示例"
   },
   {
     "id": "langchain_01",
     "question": "LangChain 怎么做 RAG",
-    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "expected_source": "AI-Agent/13-GitHub项目精选-Agent全景.md",
     "topic": "AI-Agent",
     "group": "agent_confusion",
-    "note": "LangChain RAG 应命中 AI-Agent，不应命中 reference"
+    "note": "原标 AI-Agents-in-Depth PDF 全书无 'LangChain RAG 教程' 内容（LangChain 仅 4 处非教程）；LangChain RAG 工程化要点实际在 13-GitHub项目精选（document loader/retriever/agent_executor/LCEL）"
   },
   {
     "id": "langchain_02",
     "question": "LangChain Agent",
-    "expected_source": "AI-Agent/AI-Agents-in-Depth-zh-CN.pdf",
+    "expected_source": "AI-Agent/W03-LangGraph入门.md",
     "topic": "AI-Agent",
     "group": "agent_confusion",
-    "note": "LangChain Agent 框架"
+    "note": "原标 PDF 无 LangChain Agent 内容；W03 有 'LangChain vs LangGraph' 对比章节（定位/抽象/关系）"
   },
   {
     "id": "vector_01",
